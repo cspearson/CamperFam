@@ -4,121 +4,113 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <title>Camper Quest – Prototype</title>
+  <title>Camper Quest</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="game-container">
-    <!-- Title / Menu Screen -->
-    <div id="screen-title" class="screen active">
-      <h1>Camper Quest</h1>
-      <p class="subtitle">Claymation Family Road Trip</p>
-      <p class="tagline">50 States • Foam Fights • Questionable Decisions</p>
-      <button id="btn-start" class="big-btn">Start Road Trip</button>
-      <p class="hint">Prototype Vertical Slice</p>
-    </div>
+  <div id="app">
 
-    <!-- Family Creation (simplified) -->
-    <div id="screen-family" class="screen">
+    <!-- TITLE -->
+    <section id="screen-title" class="screen active">
+      <div class="title-content">
+        <h1>Camper Quest</h1>
+        <p class="subtitle">A Claymation Family Road Trip</p>
+        <p class="tagline">Talk your way across America</p>
+        <button id="btn-start" class="btn primary">Start Road Trip</button>
+      </div>
+    </section>
+
+    <!-- FAMILY -->
+    <section id="screen-family" class="screen">
       <h2>Create Your Family</h2>
-      <div class="family-form">
-        <label>Your Role:
+      <div class="card">
+        <label>You are the:
           <select id="player-role">
-            <option value="sister">Older Sister</option>
-            <option value="brother">Older Brother</option>
-            <option value="mom">Mom</option>
-            <option value="dad">Dad</option>
-            <option value="younger">Younger Sibling</option>
+            <option value="Older Sister">Older Sister</option>
+            <option value="Older Brother">Older Brother</option>
+            <option value="Mom">Mom</option>
+            <option value="Dad">Dad</option>
+            <option value="Younger Sibling">Younger Sibling</option>
           </select>
         </label>
-        <label>Family Size:
+        <label>Family size:
           <select id="family-size">
-            <option value="3">3 (Easy)</option>
+            <option value="3">3 (easier)</option>
             <option value="4" selected>4</option>
             <option value="5">5</option>
-            <option value="6">6 (Harder)</option>
+            <option value="6">6 (more chaos)</option>
           </select>
         </label>
-        <p class="note">Larger families = more chaos, higher resource drain, more comedy.</p>
+        <p class="hint">Bigger families drain resources faster and create more arguments.</p>
       </div>
-      <button id="btn-family-done" class="big-btn">Hit the Road</button>
-    </div>
+      <button id="btn-family-done" class="btn primary">Hit the Road</button>
+    </section>
 
-    <!-- Camper Hub -->
-    <div id="screen-hub" class="screen">
+    <!-- HUB -->
+    <section id="screen-hub" class="screen">
       <h2>The Camper</h2>
-      <div id="resources" class="resource-bar">
-        <div class="res"><span>⛽ Gas</span><span id="res-gas">80</span></div>
-        <div class="res"><span>🍎 Food</span><span id="res-food">60</span></div>
-        <div class="res"><span>💵 Money</span><span id="res-money">120</span></div>
-        <div class="res"><span>😊 Morale</span><span id="res-morale">75</span></div>
-        <div class="res"><span>🔥 Heat</span><span id="res-heat">0</span></div>
+      <div id="resources" class="resources">
+        <div class="res"><span>⛽</span><b id="res-gas">80</b></div>
+        <div class="res"><span>🍎</span><b id="res-food">55</b></div>
+        <div class="res"><span>💵</span><b id="res-money">110</b></div>
+        <div class="res"><span>😊</span><b id="res-morale">70</b></div>
+        <div class="res"><span>🚨</span><b id="res-heat">0</b></div>
       </div>
-      <div class="hub-actions">
-        <button id="btn-rest">Rest (Restore Morale)</button>
-        <button id="btn-eat">Eat (-Food, +Morale)</button>
-        <button id="btn-map">Look at Map</button>
-        <button id="btn-depart" class="big-btn">Depart for Next Stop</button>
+      <div id="family-line" class="family-line"></div>
+      <div class="hub-buttons">
+        <button id="btn-rest" class="btn">Rest</button>
+        <button id="btn-eat" class="btn">Eat</button>
+        <button id="btn-talk-family" class="btn">Talk to Family</button>
+        <button id="btn-depart" class="btn primary">Look at Map</button>
       </div>
-      <div id="family-status" class="family-status"></div>
       <div id="hub-log" class="log"></div>
-    </div>
+    </section>
 
-    <!-- Map / Travel Select -->
-    <div id="screen-map" class="screen">
+    <!-- MAP -->
+    <section id="screen-map" class="screen">
       <h2>Where to next?</h2>
-      <div class="map-options">
-        <button class="dest-btn" data-dest="reststop">Mystery Rest Stop (Nearby)</button>
-        <button class="dest-btn" data-dest="campground">Shady Campground</button>
-        <button class="dest-btn" data-dest="twine">World’s Largest Ball of Twine</button>
+      <div class="destinations">
+        <button class="btn dest" data-dest="reststop">Rusty's Roadside Rest Stop</button>
+        <button class="btn dest" data-dest="campground">Shady Pines Campground</button>
       </div>
-      <button id="btn-map-back" class="secondary-btn">Back to Camper</button>
-    </div>
+      <button id="btn-map-back" class="btn secondary">Back to Camper</button>
+    </section>
 
-    <!-- First-Person Exploration -->
-    <div id="screen-fps" class="screen">
-      <canvas id="game-canvas"></canvas>
-      <div id="fps-ui">
-        <div id="crosshair">+</div>
-        <div id="ammo">🫧 Foam: <span id="ammo-count">12</span></div>
-        <div id="interact-prompt" class="hidden">Tap to Interact</div>
-        <div id="message" class="message hidden"></div>
-      </div>
-      <!-- Touch Controls -->
-      <div id="touch-controls">
-        <div id="joystick-zone">
-          <div id="joystick-base">
-            <div id="joystick-knob"></div>
-          </div>
+    <!-- POINT & CLICK SCENE -->
+    <section id="screen-scene" class="screen">
+      <div id="scene-stage">
+        <div id="scene-bg"></div>
+        <div id="hotspots"></div>
+        <div id="scene-ui">
+          <div id="scene-title"></div>
+          <button id="btn-inventory" class="icon-btn">🎒</button>
+          <button id="btn-leave" class="icon-btn">🚐</button>
         </div>
-        <div id="look-zone"></div>
-        <button id="btn-shoot" class="action-btn">🫧</button>
-        <button id="btn-interact" class="action-btn">✋</button>
-        <button id="btn-inventory" class="action-btn">🎒</button>
       </div>
-      <button id="btn-exit-fps" class="secondary-btn top-right">Back to Camper</button>
-    </div>
+    </section>
 
-    <!-- Dialogue / Event Overlay -->
-    <div id="overlay-dialogue" class="overlay hidden">
-      <div class="dialogue-box">
-        <div id="dialogue-speaker"></div>
-        <div id="dialogue-text"></div>
-        <div id="dialogue-choices"></div>
+    <!-- DIALOGUE OVERLAY -->
+    <div id="dialogue" class="overlay hidden">
+      <div class="dialogue-panel">
+        <div id="dlg-speaker"></div>
+        <div id="dlg-text"></div>
+        <div id="dlg-choices"></div>
       </div>
     </div>
 
-    <!-- Inventory Overlay -->
-    <div id="overlay-inventory" class="overlay hidden">
-      <div class="inventory-box">
+    <!-- INVENTORY OVERLAY -->
+    <div id="inventory" class="overlay hidden">
+      <div class="inv-panel">
         <h3>Inventory</h3>
-        <div id="inventory-list"></div>
-        <button id="btn-close-inv" class="secondary-btn">Close</button>
+        <div id="inv-list"></div>
+        <button id="btn-close-inv" class="btn secondary">Close</button>
       </div>
     </div>
-  </div>
 
+    <!-- MESSAGE TOAST -->
+    <div id="toast" class="toast hidden"></div>
+
+  </div>
   <script src="game.js"></script>
 </body>
 </html>

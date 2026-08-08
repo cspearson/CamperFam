@@ -1,70 +1,44 @@
-// ============================================================
-// Camper Quest – Vertical Slice Prototype
-// Claymation family road trip with foam fights & mild crime
-// ============================================================
+// Camper Quest – Point & Click Prototype
+// Dialogue-driven, Monkey Island style, big floating bubbles
 
 (() => {
-  // ---------- State ----------
   const state = {
-    screen: "title",
-    playerRole: "sister",
+    playerRole: "Older Sister",
     familySize: 4,
     family: [],
-    resources: {
-      gas: 80,
-      food: 60,
-      money: 120,
-      morale: 75,
-      heat: 0,
-      vehicle: 90
-    },
+    resources: { gas: 80, food: 55, money: 110, morale: 70, heat: 0 },
     inventory: [
-      { id: "foam_gun", name: "Foam Dart Blaster", qty: 1 },
-      { id: "darts", name: "Foam Darts", qty: 12 },
+      { id: "bubbler", name: "Bubble Blaster", qty: 1 },
+      { id: "bubbles", name: "Big Bubble Solution", qty: 6 },
       { id: "snacks", name: "Road Snacks", qty: 3 },
-      { id: "map", name: "Crumpled Map", qty: 1 }
+      { id: "map", name: "Crumpled Road Map", qty: 1 }
     ],
-    currentDest: null,
     flags: {
-      visitedReststop: false,
-      stolenCooler: false,
-      policeTriggered: false
+      coolerTaken: false,
+      talkedToRusty: false,
+      rivalConvinced: false,
+      policeDone: false,
+      visitedReststop: false
     }
   };
 
-  // ---------- DOM ----------
-  const $ = (sel) => document.querySelector(sel);
-  const $$ = (sel) => document.querySelectorAll(sel);
+  const $ = s => document.querySelector(s);
+  const $$ = s => document.querySelectorAll(s);
 
-  const screens = {
-    title: $("#screen-title"),
-    family: $("#screen-family"),
-    hub: $("#screen-hub"),
-    map: $("#screen-map"),
-    fps: $("#screen-fps")
-  };
-
-  // ---------- Screen Management ----------
-  function showScreen(name) {
-    Object.values(screens).forEach(s => s.classList.remove("active"));
-    if (screens[name]) {
-      screens[name].classList.add("active");
-      state.screen = name;
-    }
-    if (name === "hub") updateHub();
-    if (name === "fps") startFPS();
+  // ---------- Screens ----------
+  function show(id) {
+    $$(".screen").forEach(el => el.classList.remove("active"));
+    const el = document.getElementById("screen-" + id);
+    if (el) el.classList.add("active");
+    if (id === "hub") updateHub();
   }
 
   // ---------- Family ----------
   function buildFamily() {
-    const roles = ["Dad", "Mom", "Younger Brother", "Little Sister", "Cousin", "Baby"];
-    state.family = [{ role: state.playerRole, isPlayer: true, name: "You" }];
+    const others = ["Dad", "Mom", "Younger Brother", "Little Sister", "Cousin", "Baby"];
+    state.family = [{ name: "You", role: state.playerRole, isPlayer: true }];
     for (let i = 1; i < state.familySize; i++) {
-      state.family.push({
-        role: roles[i - 1] || `Family Member ${i}`,
-        isPlayer: false,
-        name: roles[i - 1] || `Member ${i}`
-      });
+      state.family.push({ name: others[i-1] || "Family", role: others[i-1], isPlayer: false });
     }
   }
 
@@ -75,627 +49,455 @@
     $("#res-money").textContent = state.resources.money;
     $("#res-morale").textContent = state.resources.morale;
     $("#res-heat").textContent = state.resources.heat;
-
-    const names = state.family.map(f => f.isPlayer ? `You (${f.role})` : f.name).join(", ");
-    $("#family-status").textContent = `Family (${state.familySize}): ${names}`;
+    $("#family-line").textContent = "Family: " + state.family.map(f => f.isPlayer ? `You (${f.role})` : f.name).join(", ");
   }
 
-  function addLog(msg) {
-    const log = $("#hub-log");
-    log.innerHTML = `<div>${msg}</div>` + log.innerHTML;
+  function log(msg) {
+    const el = $("#hub-log");
+    el.innerHTML = `<div>${msg}</div>` + el.innerHTML;
   }
 
-  // ---------- Dialogue System ----------
-  function showDialogue(speaker, text, choices = []) {
-    $("#dialogue-speaker").textContent = speaker;
-    $("#dialogue-text").textContent = text;
-    const box = $("#dialogue-choices");
+  function toast(msg, ms = 2400) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.classList.remove("hidden");
+    setTimeout(() => t.classList.add("hidden"), ms);
+  }
+
+  // ---------- Dialogue ----------
+  function say(speaker, text, choices = []) {
+    $("#dlg-speaker").textContent = speaker;
+    $("#dlg-text").textContent = text;
+    const box = $("#dlg-choices");
     box.innerHTML = "";
+
     if (choices.length === 0) {
-      const btn = document.createElement("button");
-      btn.textContent = "Continue";
-      btn.onclick = () => hideDialogue();
-      box.appendChild(btn);
+      const b = document.createElement("button");
+      b.textContent = "…";
+      b.onclick = () => hideDialogue();
+      box.appendChild(b);
     } else {
       choices.forEach(c => {
-        const btn = document.createElement("button");
-        btn.textContent = c.label;
-        btn.onclick = () => {
+        const b = document.createElement("button");
+        b.textContent = c.label;
+        b.onclick = () => {
           hideDialogue();
-          if (c.action) c.action();
+          if (c.fn) c.fn();
         };
-        box.appendChild(btn);
+        box.appendChild(b);
       });
     }
-    $("#overlay-dialogue").classList.remove("hidden");
+    $("#dialogue").classList.remove("hidden");
   }
 
   function hideDialogue() {
-    $("#overlay-dialogue").classList.add("hidden");
+    $("#dialogue").classList.add("hidden");
   }
 
   // ---------- Inventory ----------
-  function openInventory() {
-    const list = $("#inventory-list");
+  function openInv() {
+    const list = $("#inv-list");
     list.innerHTML = "";
     state.inventory.forEach(item => {
-      const div = document.createElement("div");
-      div.className = "inv-item";
-      div.innerHTML = `<span>${item.name}</span><span>×${item.qty}</span>`;
-      list.appendChild(div);
+      const d = document.createElement("div");
+      d.className = "inv-item";
+      d.innerHTML = `<span>${item.name}</span><span>×${item.qty}</span>`;
+      list.appendChild(d);
     });
-    $("#overlay-inventory").classList.remove("hidden");
+    $("#inventory").classList.remove("hidden");
   }
 
-  function closeInventory() {
-    $("#overlay-inventory").classList.add("hidden");
+  function closeInv() {
+    $("#inventory").classList.add("hidden");
   }
 
-  // ---------- FPS / Raycaster ----------
-  const canvas = $("#game-canvas");
-  const ctx = canvas.getContext("2d");
-  let width, height;
-
-  // Simple map (1 = wall, 0 = empty, 2 = interactable, 3 = door/exit, 4 = NPC, 5 = crime target)
-  // Rest Stop layout
-  const map = [
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,0,1,1,0,0,0,0,0,1,1,0,0,0,1],
-    [1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
-    [1,0,0,0,0,0,0,2,0,0,0,0,0,0,0,1], // 2 = cooler (crime)
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,4,0,0,1], // 4 = NPC
-    [1,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
-    [1,0,0,1,1,0,0,0,0,0,1,1,0,0,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-    [1,0,0,0,0,0,3,0,0,0,0,0,0,0,0,1], // 3 = exit back
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+  // ---------- Point & Click Scene: Rusty's Rest Stop ----------
+  const reststopHotspots = [
+    {
+      id: "rusty",
+      label: "Rusty",
+      style: "left:12%; bottom:22%; width:22%; height:28%;",
+      important: true,
+      action: talkRusty
+    },
+    {
+      id: "cooler",
+      label: "Cooler",
+      style: "left:58%; bottom:20%; width:24%; height:22%;",
+      important: true,
+      action: examineCooler
+    },
+    {
+      id: "rival",
+      label: "Rival Family",
+      style: "left:38%; bottom:18%; width:20%; height:26%;",
+      action: talkRival
+    },
+    {
+      id: "vending",
+      label: "Vending Machine",
+      style: "left:78%; bottom:28%; width:16%; height:30%;",
+      action: examineVending
+    },
+    {
+      id: "sign",
+      label: "Weird Sign",
+      style: "left:5%; top:38%; width:18%; height:16%;",
+      action: examineSign
+    }
   ];
 
-  const mapWidth = map[0].length;
-  const mapHeight = map.length;
-  const tileSize = 64;
-
-  let player = {
-    x: 2.5 * tileSize,
-    y: 2.5 * tileSize,
-    angle: 0,
-    fov: Math.PI / 3,
-    speed: 2.2,
-    turnSpeed: 0.045
-  };
-
-  let keys = {};
-  let moveX = 0, moveY = 0; // joystick
-  let lookDelta = 0;
-  let shooting = false;
-  let ammo = 12;
-  let lastShot = 0;
-
-  // Simple enemies / targets for foam
-  let targets = [
-    { x: 10.5 * tileSize, y: 7.5 * tileSize, alive: true, type: "rival" }
-  ];
-
-  function resize() {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
-  }
-
-  function castRay(rayAngle) {
-    const sin = Math.sin(rayAngle);
-    const cos = Math.cos(rayAngle);
-    let dist = 0;
-    const step = 2;
-    let hit = 0;
-    let hitX = 0, hitY = 0;
-
-    while (dist < 600) {
-      dist += step;
-      const testX = player.x + cos * dist;
-      const testY = player.y + sin * dist;
-      const mapX = Math.floor(testX / tileSize);
-      const mapY = Math.floor(testY / tileSize);
-
-      if (mapX < 0 || mapX >= mapWidth || mapY < 0 || mapY >= mapHeight) {
-        hit = 1;
-        break;
-      }
-      const cell = map[mapY][mapX];
-      if (cell === 1) {
-        hit = 1;
-        hitX = testX;
-        hitY = testY;
-        break;
-      }
-      if (cell === 2 || cell === 3 || cell === 4 || cell === 5) {
-        // soft hit for interactables – still draw as wall-ish but we handle separately
-      }
-    }
-    return { dist, hit, hitX, hitY };
-  }
-
-  function renderFPS() {
-    // Sky & floor
-    ctx.fillStyle = "#87CEEB";
-    ctx.fillRect(0, 0, width, height / 2);
-    ctx.fillStyle = "#5D4037";
-    ctx.fillRect(0, height / 2, width, height / 2);
-
-    const numRays = Math.min(width, 320); // performance
-    const rayStep = player.fov / numRays;
-
-    for (let i = 0; i < numRays; i++) {
-      const rayAngle = player.angle - player.fov / 2 + rayStep * i;
-      const { dist } = castRay(rayAngle);
-      const corrected = dist * Math.cos(rayAngle - player.angle);
-      const wallHeight = Math.min(height, (tileSize * 280) / (corrected + 0.1));
-
-      const shade = Math.max(40, 200 - corrected * 0.35);
-      ctx.fillStyle = `rgb(${shade * 0.6}, ${shade * 0.4}, ${shade * 0.25})`;
-      const x = (i / numRays) * width;
-      const w = width / numRays + 1;
-      ctx.fillRect(x, (height - wallHeight) / 2, w, wallHeight);
-    }
-
-    // Simple target sprites (billboard-ish)
-    targets.forEach(t => {
-      if (!t.alive) return;
-      const dx = t.x - player.x;
-      const dy = t.y - player.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 20 || dist > 500) return;
-
-      let angleTo = Math.atan2(dy, dx) - player.angle;
-      while (angleTo > Math.PI) angleTo -= Math.PI * 2;
-      while (angleTo < -Math.PI) angleTo += Math.PI * 2;
-
-      if (Math.abs(angleTo) < player.fov / 1.5) {
-        const size = Math.min(180, (tileSize * 180) / dist);
-        const screenX = width / 2 + (angleTo / player.fov) * width - size / 2;
-        const screenY = height / 2 - size / 3;
-        ctx.fillStyle = t.type === "rival" ? "#e74c3c" : "#9b59b6";
-        ctx.beginPath();
-        ctx.arc(screenX + size / 2, screenY + size / 2, size / 2.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "#fff";
-        ctx.font = `${Math.max(12, size / 4)}px sans-serif`;
-        ctx.textAlign = "center";
-        ctx.fillText("Rival", screenX + size / 2, screenY - 4);
-      }
+  function enterReststop() {
+    $("#scene-bg").className = "reststop";
+    $("#scene-title").textContent = "Rusty's Roadside Rest Stop";
+    const hs = $("#hotspots");
+    hs.innerHTML = "";
+    reststopHotspots.forEach(h => {
+      const el = document.createElement("div");
+      el.className = "hotspot" + (h.important ? " important" : "");
+      el.style.cssText = h.style;
+      el.textContent = h.label;
+      el.onclick = h.action;
+      hs.appendChild(el);
     });
-
-    // Crosshair already in HTML
-  }
-
-  function updatePlayer(dt) {
-    // Joystick movement
-    if (moveX !== 0 || moveY !== 0) {
-      const moveAngle = player.angle + Math.atan2(moveX, -moveY);
-      const speed = player.speed * (dt / 16);
-      const newX = player.x + Math.cos(moveAngle) * speed * Math.hypot(moveX, moveY);
-      const newY = player.y + Math.sin(moveAngle) * speed * Math.hypot(moveX, moveY);
-
-      const mapX = Math.floor(newX / tileSize);
-      const mapY = Math.floor(player.y / tileSize);
-      if (map[mapY] && map[mapY][mapX] !== 1) player.x = newX;
-
-      const mapX2 = Math.floor(player.x / tileSize);
-      const mapY2 = Math.floor(newY / tileSize);
-      if (map[mapY2] && map[mapY2][mapX2] !== 1) player.y = newY;
-    }
-
-    // Keyboard fallback
-    if (keys["ArrowLeft"] || keys["a"]) player.angle -= player.turnSpeed;
-    if (keys["ArrowRight"] || keys["d"]) player.angle += player.turnSpeed;
-    if (keys["ArrowUp"] || keys["w"]) {
-      player.x += Math.cos(player.angle) * player.speed;
-      player.y += Math.sin(player.angle) * player.speed;
-    }
-    if (keys["ArrowDown"] || keys["s"]) {
-      player.x -= Math.cos(player.angle) * player.speed;
-      player.y -= Math.sin(player.angle) * player.speed;
-    }
-
-    player.angle += lookDelta;
-    lookDelta *= 0.7; // dampen
-  }
-
-  function tryShoot() {
-    const now = performance.now();
-    if (now - lastShot < 280 || ammo <= 0) return;
-    lastShot = now;
-    ammo--;
-    $("#ammo-count").textContent = ammo;
-
-    // Hit test against targets
-    targets.forEach(t => {
-      if (!t.alive) return;
-      const dx = t.x - player.x;
-      const dy = t.y - player.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      let angleTo = Math.atan2(dy, dx) - player.angle;
-      while (angleTo > Math.PI) angleTo -= Math.PI * 2;
-      while (angleTo < -Math.PI) angleTo += Math.PI * 2;
-
-      if (Math.abs(angleTo) < 0.25 && dist < 350) {
-        t.alive = false;
-        showMessage("Direct hit! Foam everywhere.");
-        state.resources.morale = Math.min(100, state.resources.morale + 5);
-        setTimeout(() => {
-          showDialogue("Rival Camper", "Hey! Watch it with that foam! ...Okay, that was actually pretty fun.", [
-            { label: "Offer a truce snack", action: () => {
-              state.resources.food = Math.max(0, state.resources.food - 1);
-              state.resources.morale = Math.min(100, state.resources.morale + 8);
-              showMessage("You shared snacks. Morale up!");
-            }},
-            { label: "Laugh and walk away", action: () => showMessage("They wipe foam off their face, grumbling.") }
-          ]);
-        }, 600);
-      }
-    });
-
-    if (ammo <= 0) showMessage("Out of foam darts!");
-  }
-
-  function tryInteract() {
-    // Check nearby map cells
-    const checkDist = tileSize * 1.4;
-    const dirs = [
-      [Math.cos(player.angle), Math.sin(player.angle)],
-      [Math.cos(player.angle + 0.4), Math.sin(player.angle + 0.4)],
-      [Math.cos(player.angle - 0.4), Math.sin(player.angle - 0.4)]
-    ];
-
-    for (const [dx, dy] of dirs) {
-      const tx = player.x + dx * checkDist;
-      const ty = player.y + dy * checkDist;
-      const mx = Math.floor(tx / tileSize);
-      const my = Math.floor(ty / tileSize);
-      if (!map[my] || map[my][mx] === undefined) continue;
-      const cell = map[my][mx];
-
-      if (cell === 2) { // Cooler – crime opportunity
-        if (state.flags.stolenCooler) {
-          showMessage("The cooler is already empty.");
-          return;
-        }
-        showDialogue("Tempting Cooler", "Someone left a fully stocked cooler unattended. The lid is slightly open...", [
-          { label: "Leave it alone (good)", action: () => {
-            state.resources.morale = Math.min(100, state.resources.morale + 3);
-            showMessage("You resist temptation. Mom would be proud.");
-          }},
-          { label: "Quietly take some snacks (crime)", action: () => {
-            state.flags.stolenCooler = true;
-            state.resources.food += 8;
-            state.resources.heat += 15;
-            state.inventory.push({ id: "stolen_soda", name: "Suspicious Soda", qty: 2 });
-            showMessage("You grab snacks. Heat increased. Someone might notice...");
-            // Chance to trigger police later
-            if (Math.random() > 0.4) {
-              setTimeout(() => triggerPolice("Someone reported a cooler theft."), 2500);
-            }
-          }},
-          { label: "Foam-tag the cooler as a joke", action: () => {
-            state.resources.heat += 5;
-            showMessage("You leave a foam signature. Petty, but funny.");
-          }}
+    show("scene");
+    if (!state.flags.visitedReststop) {
+      setTimeout(() => {
+        say("You", "This place looks like every rest stop in America… only weirder.", [
+          { label: "Look around", fn: () => toast("Tap the glowing spots to explore and talk.") }
         ]);
-        return;
-      }
-
-      if (cell === 3) { // Exit
-        showDialogue("Camper", "Head back to the camper?", [
-          { label: "Yes, return", action: () => {
-            stopFPS();
-            showScreen("hub");
-            addLog("Returned from the rest stop.");
-            if (!state.flags.visitedReststop) {
-              state.flags.visitedReststop = true;
-              state.resources.morale = Math.min(100, state.resources.morale + 10);
-              addLog("Scrapbook: Rest Stop memory added!");
-            }
-          }},
-          { label: "Keep exploring", action: () => {} }
-        ]);
-        return;
-      }
-
-      if (cell === 4) { // NPC
-        showDialogue("Rest Stop Regular", "You folks look like you've been on the road a while. Watch out for the campground down the way — things go missing at night.", [
-          { label: "Ask about the cooler", action: () => {
-            showDialogue("Rest Stop Regular", "That cooler? Belongs to a family from two spots over. They're... particular about their snacks.", [
-              { label: "Got it", action: () => {} }
-            ]);
-          }},
-          { label: "Thanks for the tip", action: () => {
-            state.resources.morale = Math.min(100, state.resources.morale + 2);
-          }}
-        ]);
-        return;
-      }
+      }, 400);
     }
-    showMessage("Nothing to interact with here.");
   }
 
-  function triggerPolice(reason) {
-    if (state.flags.policeTriggered) return;
-    state.flags.policeTriggered = true;
-    showDialogue("Officer Clay", reason + " Mind explaining yourself?", [
-      { label: "Talk your way out", action: () => {
-        const success = state.resources.morale > 50 || Math.random() > 0.45;
-        if (success) {
-          state.resources.heat = Math.max(0, state.resources.heat - 10);
-          showDialogue("Officer Clay", "Alright... I'll let it slide this time. Keep your foam to yourselves.", [
-            { label: "Yes sir", action: () => showMessage("You talked your way out. Heat reduced a bit.") }
-          ]);
+  // --- Interactions ---
+  function talkRusty() {
+    if (state.flags.talkedToRusty) {
+      say("Rusty", "You again? Don't cause trouble. I already called the ranger once today.", [
+        { label: "We'll be good", fn: () => {} },
+        { label: "Any tips?", fn: () => say("Rusty", "Keep an eye on that cooler over there. People get sticky fingers around here.") }
+      ]);
+      return;
+    }
+    state.flags.talkedToRusty = true;
+    say("Rusty", "Welcome to Rusty's. Gas is overpriced, coffee is worse, and the ball of twine is exactly as disappointing as you'd expect.", [
+      { label: "Nice place…", fn: () => say("Rusty", "It's a living. Watch your belongings.") },
+      { label: "Seen anything strange?", fn: () => {
+        say("Rusty", "A rival camper family showed up earlier. They're eyeing everything. And someone keeps messing with the cooler.", [
+          { label: "Thanks for the heads-up", fn: () => { state.resources.morale = Math.min(100, state.resources.morale + 3); } }
+        ]);
+      }},
+      { label: "Got any bubble solution for sale?", fn: () => {
+        if (state.resources.money >= 15) {
+          state.resources.money -= 15;
+          const b = state.inventory.find(i => i.id === "bubbles");
+          if (b) b.qty += 4;
+          toast("Bought more bubble solution (-$15)");
         } else {
-          showDialogue("Officer Clay", "Nice try. That's a fine.", [
-            { label: "Pay the fine ($25)", action: () => {
-              state.resources.money = Math.max(0, state.resources.money - 25);
-              state.resources.heat += 5;
-              showMessage("Fine paid. Money down, still a little heat.");
-            }}
-          ]);
+          say("Rusty", "You're short. Come back when you have cash.");
         }
-      }},
-      { label: "Try to outrun / escape", action: () => {
-        const success = Math.random() > 0.5;
-        if (success) {
-          state.resources.heat += 20;
-          showMessage("You bolted back to the camper! Escaped, but Heat is way up.");
-          stopFPS();
-          showScreen("hub");
-          addLog("Escaped a police encounter. Heat is high.");
-        } else {
-          showDialogue("Officer Clay", "Not so fast!", [
-            { label: "Submit to the talking-to", action: () => {
-              state.resources.money = Math.max(0, state.resources.money - 40);
-              state.resources.morale = Math.max(0, state.resources.morale - 15);
-              state.resources.heat += 10;
-              showMessage("Caught. Fine + lecture. Morale took a hit.");
-            }}
-          ]);
-        }
-      }},
-      { label: "Foam fight?!", action: () => {
-        state.resources.heat += 30;
-        showDialogue("Officer Clay", "Really? Foam darts at an officer?", [
-          { label: "Oops... submit", action: () => {
-            state.resources.money = Math.max(0, state.resources.money - 50);
-            state.resources.morale = Math.max(0, state.resources.morale - 20);
-            showMessage("Bad idea. Big fine and very annoyed family later.");
-          }}
-        ]);
-      }},
-      { label: "Submit quietly", action: () => {
-        state.resources.money = Math.max(0, state.resources.money - 30);
-        state.resources.morale = Math.max(0, state.resources.morale - 10);
-        showMessage("You take the fine. Lesson learned (maybe).");
       }}
     ]);
   }
 
-  function showMessage(text) {
-    const el = $("#message");
-    el.textContent = text;
-    el.classList.remove("hidden");
-    setTimeout(() => el.classList.add("hidden"), 2200);
-  }
-
-  let fpsRunning = false;
-  let lastTime = 0;
-
-  function fpsLoop(time) {
-    if (!fpsRunning) return;
-    const dt = time - lastTime || 16;
-    lastTime = time;
-    updatePlayer(dt);
-    renderFPS();
-    requestAnimationFrame(fpsLoop);
-  }
-
-  function startFPS() {
-    resize();
-    player.x = 2.5 * tileSize;
-    player.y = 2.5 * tileSize;
-    player.angle = 0;
-    ammo = state.inventory.find(i => i.id === "darts")?.qty || 12;
-    $("#ammo-count").textContent = ammo;
-    targets.forEach(t => t.alive = true);
-    fpsRunning = true;
-    lastTime = performance.now();
-    requestAnimationFrame(fpsLoop);
-  }
-
-  function stopFPS() {
-    fpsRunning = false;
-    // sync ammo back
-    const dartItem = state.inventory.find(i => i.id === "darts");
-    if (dartItem) dartItem.qty = ammo;
-  }
-
-  // ---------- Touch Controls ----------
-  function setupTouch() {
-    const base = $("#joystick-base");
-    const knob = $("#joystick-knob");
-    const zone = $("#joystick-zone");
-    let active = false;
-    let originX = 0, originY = 0;
-
-    function updateKnob(dx, dy) {
-      const max = 40;
-      const dist = Math.hypot(dx, dy);
-      const clamped = Math.min(dist, max);
-      const angle = Math.atan2(dy, dx);
-      const kx = Math.cos(angle) * clamped;
-      const ky = Math.sin(angle) * clamped;
-      knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
-      moveX = kx / max;
-      moveY = ky / max;
+  function examineCooler() {
+    if (state.flags.coolerTaken) {
+      say("Cooler", "It's empty now. Only a few melting ice cubes left.", [
+        { label: "Walk away", fn: () => {} }
+      ]);
+      return;
     }
-
-    zone.addEventListener("touchstart", (e) => {
-      e.preventDefault();
-      active = true;
-      const t = e.touches[0];
-      const rect = base.getBoundingClientRect();
-      originX = rect.left + rect.width / 2;
-      originY = rect.top + rect.height / 2;
-      updateKnob(t.clientX - originX, t.clientY - originY);
-    }, { passive: false });
-
-    zone.addEventListener("touchmove", (e) => {
-      e.preventDefault();
-      if (!active) return;
-      const t = e.touches[0];
-      updateKnob(t.clientX - originX, t.clientY - originY);
-    }, { passive: false });
-
-    zone.addEventListener("touchend", () => {
-      active = false;
-      knob.style.transform = "translate(-50%, -50%)";
-      moveX = 0;
-      moveY = 0;
-    });
-
-    // Look zone
-    const look = $("#look-zone");
-    let lookActive = false;
-    let lastLookX = 0;
-
-    look.addEventListener("touchstart", (e) => {
-      lookActive = true;
-      lastLookX = e.touches[0].clientX;
-    }, { passive: true });
-
-    look.addEventListener("touchmove", (e) => {
-      if (!lookActive) return;
-      const x = e.touches[0].clientX;
-      lookDelta += (x - lastLookX) * 0.008;
-      lastLookX = x;
-    }, { passive: true });
-
-    look.addEventListener("touchend", () => { lookActive = false; });
-
-    // Buttons
-    $("#btn-shoot").addEventListener("touchstart", (e) => {
-      e.preventDefault();
-      tryShoot();
-    }, { passive: false });
-
-    $("#btn-interact").addEventListener("click", tryInteract);
-    $("#btn-inventory").addEventListener("click", openInventory);
+    say("Unattended Cooler", "A big cooler sits here with the lid cracked open. Inside: sodas, sandwiches, and a fancy-looking bag of chips. No one is watching…", [
+      { label: "Leave it alone", fn: () => {
+        state.resources.morale = Math.min(100, state.resources.morale + 4);
+        toast("You resist. Morale up a little.");
+      }},
+      { label: "Take some snacks (crime)", fn: () => {
+        state.flags.coolerTaken = true;
+        state.resources.food += 10;
+        state.resources.heat += 18;
+        state.inventory.push({ id: "stolen_chips", name: "Suspicious Chips", qty: 1 });
+        toast("You grab the goods. Heat is rising…");
+        // Higher chance of police
+        setTimeout(() => {
+          if (!state.flags.policeDone && state.resources.heat > 10) {
+            triggerPolice();
+          }
+        }, 1800);
+      }},
+      { label: "Look closer first", fn: () => {
+        say("Cooler", "There's a name written on the side in marker: 'Property of the Hendersons – DO NOT TOUCH'.", [
+          { label: "Still take it", fn: () => {
+            state.flags.coolerTaken = true;
+            state.resources.food += 10;
+            state.resources.heat += 22;
+            toast("Bold move. Heat went up more.");
+            setTimeout(triggerPolice, 1600);
+          }},
+          { label: "Close the lid and leave", fn: () => toast("You close it quietly.") }
+        ]);
+      }}
+    ]);
   }
 
-  // ---------- Event Listeners ----------
-  function setupUI() {
-    $("#btn-start").onclick = () => showScreen("family");
+  function talkRival() {
+    if (state.flags.rivalConvinced) {
+      say("Rival Kid", "Okay okay, we get it. No more trouble.", [
+        { label: "Good", fn: () => {} }
+      ]);
+      return;
+    }
+    say("Rival Parent", "This is our rest stop today. Your camper is blocking the good shade.", [
+      { label: "Sorry, we'll move later", fn: () => {
+        state.resources.morale = Math.min(100, state.resources.morale + 2);
+        toast("They seem slightly less annoyed.");
+      }},
+      { label: "We were here first", fn: () => startArgument() },
+      { label: "Offer them snacks to calm down", fn: () => {
+        if (state.resources.food >= 5) {
+          state.resources.food -= 5;
+          state.flags.rivalConvinced = true;
+          state.resources.morale = Math.min(100, state.resources.morale + 8);
+          say("Rival Parent", "…Fine. Truce. Those chips better be good.", [
+            { label: "Enjoy", fn: () => toast("Argument avoided. Morale up.") }
+          ]);
+        } else {
+          toast("Not enough food to share.");
+        }
+      }}
+    ]);
+  }
+
+  function startArgument() {
+    say("Rival Parent", "Oh yeah? You want to settle this the old-fashioned way?", [
+      { label: "Talk it out calmly", fn: () => {
+        const success = state.resources.morale > 55 || Math.random() > 0.4;
+        if (success) {
+          state.flags.rivalConvinced = true;
+          say("Rival Parent", "Alright… maybe we're both tired. Just don't block the shade again.", [
+            { label: "Deal", fn: () => {
+              state.resources.morale = Math.min(100, state.resources.morale + 6);
+              toast("You won the argument with words.");
+            }}
+          ]);
+        } else {
+          say("Rival Parent", "Nice try. We're still taking the shade.", [
+            { label: "Whatever", fn: () => { state.resources.morale = Math.max(0, state.resources.morale - 6); } }
+          ]);
+        }
+      }},
+      { label: "Pull out the Bubble Blaster", fn: () => bubbleConfrontation() },
+      { label: "Walk away", fn: () => {
+        state.resources.morale = Math.max(0, state.resources.morale - 4);
+        toast("You back down. A little dignity lost.");
+      }}
+    ]);
+  }
+
+  function bubbleConfrontation() {
+    say("You", "You raise the Bubble Blaster. Huge shiny bubbles start floating between you and the rival family.", [
+      { label: "Aim for comedy – big harmless bubbles", fn: () => {
+        state.flags.rivalConvinced = true;
+        say("Rival Kid", "Whoa! Those are huge! …Okay that was actually cool.", [
+          { label: "Truce?", fn: () => {
+            state.resources.morale = Math.min(100, state.resources.morale + 10);
+            const b = state.inventory.find(i => i.id === "bubbles");
+            if (b) b.qty = Math.max(0, b.qty - 1);
+            toast("Bubbles win the day. Everyone laughs a little.");
+          }}
+        ]);
+      }},
+      { label: "Try to intimidate with bubbles", fn: () => {
+        say("Rival Parent", "Really? Bubbles? That's your big move?", [
+          { label: "Switch to talking", fn: () => {
+            state.resources.morale = Math.max(0, state.resources.morale - 3);
+            toast("Intimidation failed. You look a bit silly.");
+          }}
+        ]);
+      }}
+    ]);
+  }
+
+  function examineVending() {
+    say("Vending Machine", "It takes cards and cash. Most of the slots are empty except for some mystery meat sticks and warm soda.", [
+      { label: "Buy a soda ($3)", fn: () => {
+        if (state.resources.money >= 3) {
+          state.resources.money -= 3;
+          state.resources.food += 2;
+          toast("Warm soda acquired.");
+        } else toast("Not enough money.");
+      }},
+      { label: "Kick it gently", fn: () => {
+        if (Math.random() > 0.6) {
+          state.resources.food += 1;
+          toast("A snack fell out!");
+        } else {
+          state.resources.heat += 3;
+          toast("Nothing. And now it looks like you were trying to break it.");
+        }
+      }},
+      { label: "Leave it", fn: () => {} }
+    ]);
+  }
+
+  function examineSign() {
+    say("Weird Sign", "\"World's 3rd Largest Ball of Twine – Only 40 miles! Also: Beware of aggressive geese.\"", [
+      { label: "Noted", fn: () => toast("You make a mental note about the geese.") }
+    ]);
+  }
+
+  function triggerPolice() {
+    if (state.flags.policeDone) return;
+    state.flags.policeDone = true;
+    say("Ranger Dale", "Hold up. We've had reports of cooler theft in this exact spot. Anyone want to tell me what happened?", [
+      { label: "Talk your way out", fn: () => {
+        const good = state.resources.morale > 50 || state.flags.talkedToRusty;
+        if (good) {
+          state.resources.heat = Math.max(0, state.resources.heat - 12);
+          say("Ranger Dale", "Alright… I'll take your word for it this time. Keep your hands to yourselves.", [
+            { label: "Yes sir", fn: () => toast("You talked your way out. Heat dropped a bit.") }
+          ]);
+        } else {
+          say("Ranger Dale", "Not buying it. That's a fine.", [
+            { label: "Pay $30 fine", fn: () => {
+              state.resources.money = Math.max(0, state.resources.money - 30);
+              state.resources.heat += 5;
+              toast("Fine paid.");
+            }}
+          ]);
+        }
+      }},
+      { label: "Blame the rival family", fn: () => {
+        state.resources.heat += 8;
+        say("Ranger Dale", "Nice try. I've heard that one before.", [
+          { label: "Pay the fine", fn: () => {
+            state.resources.money = Math.max(0, state.resources.money - 25);
+            toast("Still got fined.");
+          }}
+        ]);
+      }},
+      { label: "Stay quiet / submit", fn: () => {
+        state.resources.money = Math.max(0, state.resources.money - 35);
+        state.resources.morale = Math.max(0, state.resources.morale - 8);
+        toast("You take the fine quietly. Morale down.");
+      }}
+    ]);
+  }
+
+  // ---------- Campground (simple for now) ----------
+  function enterCampground() {
+    say("Shady Pines Campground", "Night is falling. Your camper is parked. You hear rustling near the storage bay…", [
+      { label: "Go check it out", fn: () => {
+        say("Camper Burglary!", "Someone is trying to open the back compartment!", [
+          { label: "Yell and scare them off", fn: () => {
+            state.resources.morale = Math.min(100, state.resources.morale + 4);
+            toast("They run. Camper is safe.");
+            show("hub");
+            log("Stopped a campground burglary.");
+          }},
+          { label: "Use big bubbles to startle them", fn: () => {
+            const b = state.inventory.find(i => i.id === "bubbles");
+            if (b && b.qty > 0) {
+              b.qty--;
+              state.resources.morale = Math.min(100, state.resources.morale + 8);
+              toast("Giant bubbles everywhere. Thief panics and flees.");
+            } else {
+              toast("No bubble solution left!");
+            }
+            show("hub");
+            log("Used bubbles to stop a burglary.");
+          }},
+          { label: "Hide and hope they leave", fn: () => {
+            state.resources.food = Math.max(0, state.resources.food - 8);
+            state.resources.morale = Math.max(0, state.resources.morale - 10);
+            toast("They took some food. Family is rattled.");
+            show("hub");
+          }}
+        ]);
+      }},
+      { label: "Lock everything and stay inside", fn: () => {
+        toast("You stay safe inside. Morning comes quietly.");
+        show("hub");
+        log("Played it safe at the campground.");
+      }}
+    ]);
+  }
+
+  // ---------- Wire up UI ----------
+  function init() {
+    $("#btn-start").onclick = () => show("family");
 
     $("#btn-family-done").onclick = () => {
       state.playerRole = $("#player-role").value;
       state.familySize = parseInt($("#family-size").value, 10);
       buildFamily();
-      // Scale difficulty lightly
       if (state.familySize >= 5) {
-        state.resources.food = 50;
-        state.resources.money = 100;
+        state.resources.food = 45;
+        state.resources.money = 95;
       }
-      showScreen("hub");
-      addLog("Family packed into the camper. Adventure begins!");
+      show("hub");
+      log("Family loaded into the camper. Let the questionable decisions begin.");
     };
 
     $("#btn-rest").onclick = () => {
-      state.resources.morale = Math.min(100, state.resources.morale + 15);
+      state.resources.morale = Math.min(100, state.resources.morale + 12);
       state.resources.food = Math.max(0, state.resources.food - 2);
-      addLog("Everyone rested. Morale up, a bit of food eaten.");
+      log("Everyone rested.");
       updateHub();
     };
 
     $("#btn-eat").onclick = () => {
-      if (state.resources.food < 5) {
-        addLog("Not enough food!");
-        return;
-      }
-      state.resources.food -= 5;
-      state.resources.morale = Math.min(100, state.resources.morale + 12);
-      addLog("Family meal. Spirits lifted.");
+      if (state.resources.food < 6) { toast("Not enough food."); return; }
+      state.resources.food -= 6;
+      state.resources.morale = Math.min(100, state.resources.morale + 14);
+      log("Family meal. Spirits lifted.");
       updateHub();
     };
 
-    $("#btn-map").onclick = () => showScreen("map");
-    $("#btn-map-back").onclick = () => showScreen("hub");
+    $("#btn-talk-family").onclick = () => {
+      const lines = [
+        "Dad starts explaining a 'better route' that will definitely take longer.",
+        "Someone complains about the last rest stop bathroom.",
+        "The younger ones are already arguing over who gets the window seat next.",
+        "Mom asks if anyone has seen the good snacks."
+      ];
+      say("Family", lines[Math.floor(Math.random() * lines.length)], [
+        { label: "Listen patiently", fn: () => { state.resources.morale = Math.min(100, state.resources.morale + 3); } },
+        { label: "Change the subject", fn: () => {} }
+      ]);
+    };
 
-    $$(".dest-btn").forEach(btn => {
+    $("#btn-depart").onclick = () => show("map");
+    $("#btn-map-back").onclick = () => show("hub");
+
+    $$(".dest").forEach(btn => {
       btn.onclick = () => {
         const dest = btn.dataset.dest;
-        state.currentDest = dest;
-        // Simple cost
-        state.resources.gas = Math.max(0, state.resources.gas - 8);
+        state.resources.gas = Math.max(0, state.resources.gas - 7);
         state.resources.food = Math.max(0, state.resources.food - 3);
-
-        if (dest === "reststop" || dest === "twine") {
-          showScreen("fps");
-          addLog(`Arrived at ${btn.textContent}.`);
-        } else if (dest === "campground") {
-          // Quick campground event
-          showDialogue("Shady Campground", "Night falls. You hear rustling near the camper...", [
-            { label: "Investigate", action: () => {
-              showDialogue("Camper Burglary!", "Someone is trying to get into the storage bay!", [
-                { label: "Chase them off with foam", action: () => {
-                  state.resources.morale = Math.min(100, state.resources.morale + 5);
-                  showMessage("You scare them off with a barrage of foam. Camper safe!");
-                  showScreen("hub");
-                  addLog("Defended the camper from a nighttime burglary.");
-                }},
-                { label: "Yell and make noise", action: () => {
-                  state.resources.morale = Math.max(0, state.resources.morale - 5);
-                  showMessage("They run. A few snacks are missing though.");
-                  state.resources.food = Math.max(0, state.resources.food - 4);
-                  showScreen("hub");
-                }},
-                { label: "Hide and hope they leave", action: () => {
-                  state.resources.food = Math.max(0, state.resources.food - 10);
-                  state.resources.morale = Math.max(0, state.resources.morale - 12);
-                  showMessage("They took a good amount of food. Family is shaken.");
-                  showScreen("hub");
-                }}
-              ]);
-            }},
-            { label: "Stay inside and lock up", action: () => {
-              state.resources.morale = Math.max(0, state.resources.morale - 3);
-              showMessage("You stay safe. Morning comes without further incident.");
-              showScreen("hub");
-            }}
-          ]);
-        }
         updateHub();
+
+        if (dest === "reststop") {
+          state.flags.visitedReststop = true;
+          enterReststop();
+          log("Arrived at Rusty's Roadside Rest Stop.");
+        } else {
+          enterCampground();
+        }
       };
     });
 
-    $("#btn-depart").onclick = () => showScreen("map");
-    $("#btn-exit-fps").onclick = () => {
-      stopFPS();
-      showScreen("hub");
+    $("#btn-leave").onclick = () => {
+      show("hub");
+      log("Back at the camper.");
+      if (state.flags.visitedReststop) {
+        log("Scrapbook updated: Rest Stop visit.");
+      }
     };
 
-    $("#btn-close-inv").onclick = closeInventory;
-
-    // Keyboard
-    window.addEventListener("keydown", e => { keys[e.key] = true; });
-    window.addEventListener("keyup", e => { keys[e.key] = false; });
-    window.addEventListener("resize", () => {
-      if (state.screen === "fps") resize();
-    });
+    $("#btn-inventory").onclick = openInv;
+    $("#btn-close-inv").onclick = closeInv;
   }
 
-  // ---------- Init ----------
-  setupUI();
-  setupTouch();
-  showScreen("title");
-
-  console.log("Camper Quest prototype loaded.");
+  init();
 })();
