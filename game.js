@@ -57,7 +57,9 @@
       camperExploded: false,
       visitedTwin: false,
       visitedBluegrass: false,
-      foundTwinJunk: false
+      foundTwinJunk: false,
+      shadyStalkHint: false,
+      picnicDone: false
     },
     statesVisited: 0,
     currentState: "TN",
@@ -719,9 +721,10 @@
     clearSprites();
     $("#scene-bg").className = "reststop";
     $("#scene-title").textContent = "Rusty's Roadside Rest Stop";
-    addSprite("char-rusty.jpg", "rusty");
-    addSprite("char-rival-family.jpg", "rival");
-    addSprite("obj-cooler.jpg", "cooler");
+    addSprite("char-rusty.png", "rusty");
+    maybeStalkShady("rest");
+    addSprite("char-rival-family.png", "rival");
+    addSprite("obj-cooler.png", "cooler");
 
     const hs = $("#hotspots");
     hs.innerHTML = "";
@@ -1054,9 +1057,10 @@
     clearSprites();
     $("#scene-bg").className = "campground";
     $("#scene-title").textContent = "Shady Pines Campground";
+    maybeStalkShady("camp");
     // Use rival-family figure as a stand-in "shady" silhouette until dedicated art
     if (!state.flags.shadyDealt) {
-      addSprite("char-shady.jpg", "shady");
+      addSprite("char-shady.png", "shady");
     }
     const hs = $("#hotspots");
     hs.innerHTML = "";
@@ -1256,35 +1260,61 @@
     ]);
   }
 
+  function makeHotspot(h) {
+    const el = document.createElement("div");
+    el.className = "hotspot" + (h.important ? " important" : "") + (h.img ? " has-img" : "");
+    el.style.cssText = h.style;
+    if (h.img) {
+      const img = document.createElement("img");
+      img.src = h.img;
+      img.className = "hotspot-img";
+      img.alt = h.label;
+      el.appendChild(img);
+    }
+    const lab = document.createElement("span");
+    lab.className = "hotspot-label";
+    lab.textContent = h.label;
+    el.appendChild(lab);
+    el.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (state.playerMoving) return;
+      if (Math.abs(state.playerX - (h.x || 50)) < 18) h.action();
+      else walkThen(h.action, h.x || 50);
+    };
+    return el;
+  }
+
+  function maybeStalkShady(place) {
+    // Shady appears randomly in places after first forest encounter
+    if (state.flags.shadyDealt) return;
+    if (!state.flags.forestExplored && place !== "forest") return;
+    const chance = place === "forest" ? 0.9 : 0.35;
+    if (Math.random() > chance) return;
+    addSprite("char-shady.png", "shady stalk");
+    if (!state.flags.shadyStalkHint) {
+      state.flags.shadyStalkHint = true;
+      setTimeout(() => toast("That hoodie guy is following you…"), 600);
+    }
+  }
+
   function enterForest() {
     state.flags.forestExplored = true;
     clearSprites();
     $("#scene-bg").className = "forest";
     $("#scene-title").textContent = "Deep Woods";
-    if (!state.flags.shadyDealt) addSprite("char-shady.jpg", "shady");
+    maybeStalkShady("forest");
     const hs = $("#hotspots");
     hs.innerHTML = "";
     const spots = [
-      { label: "Root Hollow", style: "left:10%;bottom:16%;width:22%;height:28%;", important: true, action: forestHollow, x: 16 },
-      { label: "Fallen Log", style: "left:38%;bottom:12%;width:24%;height:24%;", important: true, action: forestLog, x: 44 },
-      { label: "Clearing", style: "left:65%;bottom:18%;width:22%;height:30%;", action: forestClearing, x: 70 },
-      { label: "Strange Noise", style: "left:20%;top:20%;width:24%;height:18%;", action: forestNoise, x: 28 },
-      { label: "Back to Camp", style: "left:42%;bottom:2%;width:20%;height:12%;", action: () => enterCampground(), x: 50 }
+      { label: "Root Hollow", style: "left:8%;bottom:14%;width:24%;height:32%;", important: true, img: "obj-root.png", action: forestHollow, x: 16 },
+      { label: "Fallen Log", style: "left:36%;bottom:10%;width:26%;height:28%;", important: true, img: "obj-log.png", action: forestLog, x: 44 },
+      { label: "Clearing", style: "left:64%;bottom:16%;width:24%;height:32%;", img: "obj-firering.png", action: forestClearing, x: 70 },
+      { label: "Strange Noise", style: "left:18%;top:18%;width:22%;height:20%;", action: forestNoise, x: 28 },
+      { label: "Picnic Ambush", style: "left:70%;top:12%;width:22%;height:18%;", important: true, action: startSpitballGame, x: 78 },
+      { label: "Back to Camp", style: "left:40%;bottom:2%;width:22%;height:12%;", action: () => enterCampground(), x: 50 }
     ];
-    spots.forEach(h => {
-      const el = document.createElement("div");
-      el.className = "hotspot" + (h.important ? " important" : "");
-      el.style.cssText = h.style;
-      el.textContent = h.label;
-      el.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (state.playerMoving) return;
-        if (Math.abs(state.playerX - h.x) < 16) h.action();
-        else walkThen(h.action, h.x);
-      };
-      hs.appendChild(el);
-    });
+    spots.forEach(h => hs.appendChild(makeHotspot(h)));
     show("scene");
     state.playerX = 50;
     ensureWalkLayer();
@@ -1292,7 +1322,7 @@
     if (!state.flags.forestSceneIntro) {
       state.flags.forestSceneIntro = true;
       setTimeout(() => say("Deep Woods", "The trail disappears under needles. Your light only reaches so far.", [
-        { label: "Look around", fn: () => toast("Tap spots to search. Yellow ones matter.") }
+        { label: "Look around", fn: () => toast("Yellow spots have things to find. There's a picnic farther in…") }
       ]), 300);
     }
   }
@@ -1473,7 +1503,8 @@
     clearSprites();
     $("#scene-bg").className = "diner";
     $("#scene-title").textContent = "Neon Diner";
-    addSprite("char-waitress.jpg", "waitress");
+    addSprite("char-waitress.png", "waitress");
+    maybeStalkShady("diner");
     const hs = $("#hotspots");
     hs.innerHTML = "";
     const spots = [
@@ -1867,7 +1898,7 @@
     clearSprites();
     $("#scene-bg").className = "reststop";
     $("#scene-title").textContent = "Bluegrass Welcome Center";
-    addSprite("char-rusty.jpg", "rusty");
+    addSprite("char-rusty.png", "rusty");
     const hs = $("#hotspots");
     hs.innerHTML = "";
     const spots = [
@@ -1914,6 +1945,179 @@
     state.playerX = 30;
     ensureWalkLayer();
     ensurePlayerSprite();
+  }
+
+
+  // ---------- SPITBALL PICNIC MINIGAME ----------
+  const spit = { running: false, raf: null, score: 0, ammo: 12, targets: [], lastT: 0, time: 20 };
+
+  function startSpitballGame() {
+    if (state.flags.picnicDone) {
+      say("Picnic Spot", "The rival family left. Crumbs and anger remain.", [
+        { label: "OK", fn: () => {} }
+      ]);
+      return;
+    }
+    if (!hasItem("spitballs") || state.inventory.find(i => i.id === "spitballs").qty < 1) {
+      say("Behind the Log", "A rival family is picnicking ahead. You could spitball them — if you had ammo.", [
+        { label: "Leave", fn: () => {} }
+      ]);
+      return;
+    }
+    say("Behind the Log", "Rival family picnic dead ahead. You're hidden. Ready to open fire?", [
+      { label: "Start spitball assault", fn: () => runSpitball() },
+      { label: "Not now", fn: () => {} }
+    ]);
+  }
+
+  function runSpitball() {
+    show("drive"); // reuse full-screen stage
+    const canvas = $("#drive-canvas");
+    canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
+    canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
+    spit.running = true;
+    spit.score = 0;
+    spit.ammo = Math.min(12, state.inventory.find(i => i.id === "spitballs")?.qty || 0);
+    spit.time = state.difficulty === "hard" ? 14 : (state.difficulty === "easy" ? 25 : 20);
+    spit.targets = [
+      { x: 0.25, y: 0.45, w: 0.12, hit: 0 },
+      { x: 0.5, y: 0.4, w: 0.1, hit: 0 },
+      { x: 0.72, y: 0.48, w: 0.12, hit: 0 }
+    ];
+    spit.lastT = 0;
+    $("#drive-speed").textContent = "Spitballs";
+    $("#drive-dist").textContent = spit.ammo + " left";
+    $("#drive-heat").textContent = "Hits 0";
+    $("#btn-boost").textContent = "Fire";
+    $("#btn-brake").textContent = "Duck";
+    $("#drive-steer-hint").textContent = "Tap targets · hide behind log";
+
+    const onFire = (clientX, clientY) => {
+      if (!spit.running || spit.ammo <= 0) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = (clientX - rect.left) / rect.width;
+      const y = (clientY - rect.top) / rect.height;
+      spit.ammo--;
+      useItem("spitballs", 1);
+      let hit = false;
+      spit.targets.forEach(t => {
+        if (t.hit >= 3) return;
+        if (x > t.x - t.w/2 && x < t.x + t.w/2 && y > t.y - 0.12 && y < t.y + 0.12) {
+          t.hit++;
+          spit.score++;
+          hit = true;
+        }
+      });
+      if (!hit) {
+        // miss may alert
+        if (Math.random() > 0.7) change("heat", 1);
+      }
+      $("#drive-dist").textContent = spit.ammo + " left";
+      $("#drive-heat").textContent = "Hits " + spit.score;
+    };
+
+    canvas.onclick = (e) => onFire(e.clientX, e.clientY);
+    canvas.ontouchstart = (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      onFire(t.clientX, t.clientY);
+    };
+    $("#btn-boost").onpointerdown = () => {
+      // fire center-ish random
+      onFire(canvas.getBoundingClientRect().left + canvas.clientWidth * (0.3 + Math.random()*0.4),
+             canvas.getBoundingClientRect().top + canvas.clientHeight * 0.45);
+    };
+    $("#btn-brake").onpointerdown = () => {
+      toast("You duck behind the log.");
+    };
+    $("#btn-drive-exit").onclick = () => endSpitball(false);
+
+    const loop = (t) => {
+      if (!spit.running) return;
+      if (!spit.lastT) spit.lastT = t;
+      const dt = Math.min(0.05, (t - spit.lastT) / 1000);
+      spit.lastT = t;
+      spit.time -= dt;
+      // gentle sway targets
+      spit.targets.forEach((tg, i) => {
+        tg.x = 0.25 + i * 0.23 + Math.sin(t/400 + i) * 0.03;
+      });
+      drawSpitball(canvas);
+      if (spit.time <= 0 || spit.ammo <= 0 || spit.targets.every(t => t.hit >= 3)) {
+        endSpitball(true);
+        return;
+      }
+      spit.raf = requestAnimationFrame(loop);
+    };
+    spit.raf = requestAnimationFrame(loop);
+  }
+
+  function drawSpitball(canvas) {
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    // forest-ish bg
+    ctx.fillStyle = "#2d4a2d";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#1a301a";
+    ctx.fillRect(0, h * 0.7, w, h * 0.3);
+    // log cover
+    ctx.fillStyle = "#5c3a1e";
+    ctx.fillRect(0, h * 0.72, w, h * 0.12);
+    ctx.fillStyle = "#3d2810";
+    ctx.fillRect(0, h * 0.78, w, h * 0.06);
+    // picnic blanket
+    ctx.fillStyle = "#c0392b";
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 4; j++) {
+        if ((i + j) % 2 === 0) ctx.fillRect(w * 0.2 + i * w * 0.075, h * 0.38 + j * h * 0.04, w * 0.075, h * 0.04);
+      }
+    }
+    // targets
+    spit.targets.forEach(t => {
+      const alpha = t.hit >= 3 ? 0.25 : 1;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = t.hit > 0 ? "#e67e22" : "#8e5a3a";
+      const tw = t.w * w;
+      ctx.beginPath();
+      ctx.arc(t.x * w, t.y * h, tw * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = (h * 0.03) + "px sans-serif";
+      ctx.fillText(t.hit + "/3", t.x * w - 12, t.y * h - tw * 0.6);
+      ctx.globalAlpha = 1;
+    });
+    // timer
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold " + (h * 0.04) + "px sans-serif";
+    ctx.fillText(Math.ceil(spit.time) + "s", w * 0.05, h * 0.08);
+  }
+
+  function endSpitball(finished) {
+    spit.running = false;
+    if (spit.raf) cancelAnimationFrame(spit.raf);
+    const canvas = $("#drive-canvas");
+    canvas.onclick = null;
+    canvas.ontouchstart = null;
+    // restore drive button labels
+    $("#btn-boost").textContent = "Speed";
+    $("#btn-brake").textContent = "Brake";
+    $("#drive-steer-hint").textContent = "Swipe to steer";
+
+    state.flags.picnicDone = true;
+    change("heat", 4 + Math.floor(spit.score / 2));
+    if (spit.score >= 6) {
+      change("morale", 12, "Direct hits! The picnic scatters.");
+      change("money", 3, "Someone dropped loose change running.");
+    } else if (spit.score >= 3) {
+      change("morale", 6, "A few solid hits. They look annoyed.");
+    } else {
+      change("morale", -2, "Weak showing. They barely noticed.");
+    }
+    show("hub");
+    log("Spitball picnic ambush: " + spit.score + " hits.");
+    say("Ambush Over", "Hits: " + spit.score + ". Heat is up. Time to leave before they find the log.", [
+      { label: "Back to camper", fn: () => {} }
+    ]);
   }
 
   // ---------- DRIVING MINI-GAME ----------

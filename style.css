@@ -40,6 +40,18 @@ html, body {
 
 #screen-title {
   justify-content: center;
+  align-items: center;
+}
+
+.title-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  text-align: center;
 }
 
 #screen-family h2 {
@@ -530,41 +542,91 @@ h2 {
 /* Landscape-first layout */
 @media (orientation: landscape) {
   .screen {
-    padding: 8px 16px;
+    padding: 8px 20px;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: center;
+    align-content: center;
+  }
+
+  #screen-title {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    padding: 12px 24px;
+  }
+
+  .title-content {
     flex-direction: row;
     flex-wrap: wrap;
+    align-items: center;
     justify-content: center;
-    align-content: flex-start;
+    gap: 24px 40px;
+    max-width: 900px;
+    width: 100%;
   }
-  #screen-title, #screen-family, #screen-hub, #screen-map {
+
+  #screen-title h1 {
+    width: 100%;
+    margin-bottom: 0;
+    font-size: 2.2rem;
+  }
+
+  .title-camper {
+    width: auto;
+    max-width: min(42vw, 380px);
+    max-height: 58vh;
+    object-fit: contain;
+    margin: 0;
+  }
+
+  #screen-title .btn.primary {
+    width: auto;
+    min-width: 200px;
+    margin: 0;
+  }
+
+  #screen-family, #screen-hub, #screen-map {
     flex-direction: column;
     align-items: center;
+    width: 100%;
   }
+
   #screen-hub .resources {
     flex-wrap: nowrap;
   }
+
   #scene-stage {
     width: 100%;
     height: 100%;
     max-height: 100vh;
   }
+
   .player-sprite {
     height: 48%;
   }
+
   .family-card {
     max-height: 70vh;
     overflow-y: auto;
+    max-width: 520px;
+    width: 100%;
   }
-  .destinations {
+
+  .destinations, .usa-map {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     justify-content: center;
     max-width: 90%;
   }
-  .destinations .btn {
+
+  .destinations .btn, .usa-map .btn {
     width: auto;
-    min-width: 180px;
+    min-width: 160px;
   }
 }
 
@@ -721,3 +783,43 @@ h2 {
 }
 #local-places.hidden { display: none; }
 .usa-map.hidden { display: none; }
+
+.hotspot.has-img {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px;
+  background: rgba(20, 12, 8, 0.25);
+  overflow: hidden;
+}
+.hotspot-img {
+  width: 85%;
+  height: 70%;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+.hotspot-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+  background: rgba(0,0,0,0.45);
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+.scene-sprite {
+  background: transparent !important;
+  object-fit: contain;
+}
+.scene-sprite.stalk {
+  opacity: 0.85;
+  filter: drop-shadow(0 0 8px rgba(0,0,0,0.8));
+  animation: stalk-fade 3s ease-in-out infinite alternate;
+}
+@keyframes stalk-fade {
+  from { opacity: 0.55; }
+  to { opacity: 0.95; }
+}
