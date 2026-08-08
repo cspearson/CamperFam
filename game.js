@@ -39,7 +39,15 @@
       shadyDealt: false,
       shadyMad: false,
       waitressTalks: 0,
-      familyTension: 0
+      familyTension: 0,
+      forestExplored: false,
+      foundLocket: false,
+      rustyWantsLocket: false,
+      locketReturned: false,
+      camperNeedsBatteries: false,
+      foundBatteries: false,
+      batteriesDelivered: false,
+      causedForestTrouble: false
     },
     statesVisited: 0
   };
@@ -273,55 +281,51 @@
   }
 
   
+  function familyTone() {
+    // Shared family look from player choices
+    const skin = state.playerSkin || "medium";
+    const hair = state.playerHair || "brown";
+    if (skin === "dark" || hair === "black") return "dark";
+    if (skin === "light" || hair === "blond") return "light";
+    if (hair === "red") return "light";
+    return "medium"; // brown/tan/medium
+  }
+
   function getPlayerSpriteSrc() {
     const role = state.playerRole || "Older Sister";
-    const hair = state.playerHair || "brown";
-    const skin = state.playerSkin || "medium";
-    // Family resemblance: pick closest variant by role + skin/hair
-    if (role === "Dad") {
-      if (skin === "light" || hair === "blond") return "player-dad-light.jpg";
-      return "player-dad.jpg";
-    }
-    if (role === "Mom") {
-      if (skin === "medium" || skin === "tan" || skin === "dark") return "player-mom-medium.jpg";
-      return "player-mom.jpg";
-    }
+    const tone = familyTone();
+    if (role === "Dad") return tone === "light" ? "player-dad-light.jpg" : "player-dad.jpg";
+    if (role === "Mom") return (tone === "medium" || tone === "dark") ? "player-mom-medium.jpg" : "player-mom.jpg";
     if (role === "Older Brother" || role === "Younger Sibling") {
-      if (skin === "dark" || hair === "black") return "player-brother-dark.jpg";
-      if (hair === "brown" || skin === "medium" || skin === "tan") return "player-brother-brown.jpg";
-      return "player-brother.jpg"; // blond/light default
+      if (tone === "dark") return "player-brother-dark.jpg";
+      if (tone === "medium") return "player-brother-brown.jpg";
+      return "player-brother.jpg";
     }
-    // Sister / default female teen
-    if (skin === "dark" || hair === "black") return "player-sister-dark.jpg";
-    if (hair === "blond" || skin === "light") return "player-sister-blond.jpg";
+    if (tone === "dark") return "player-sister-dark.jpg";
+    if (tone === "light") return "player-sister-blond.jpg";
     return "player-sister.jpg";
   }
 
   function getFamilyMemberSprite(member) {
     if (!member || member.isPlayer) return getPlayerSpriteSrc();
     const role = member.role || member.name || "";
-    const skin = state.playerSkin || "medium";
-    const hair = state.playerHair || "brown";
-    // Keep family looking related to the player
-    if (role === "Dad") {
-      if (skin === "light" || hair === "blond") return "player-dad-light.jpg";
-      return "player-dad.jpg";
-    }
-    if (role === "Mom") {
-      if (skin === "medium" || skin === "tan" || skin === "dark") return "player-mom-medium.jpg";
-      return "player-mom.jpg";
-    }
+    const tone = familyTone();
+    // Same tone as player so the whole family matches
+    if (role === "Dad") return tone === "light" ? "player-dad-light.jpg" : "player-dad.jpg";
+    if (role === "Mom") return (tone === "medium" || tone === "dark") ? "player-mom-medium.jpg" : "player-mom.jpg";
     if (role === "Little Sister") return "player-littlesis.jpg";
-    if (role === "Older Brother" || role === "Younger Brother" || role === "Cousin" || role === "Uncle") {
-      if (skin === "dark" || hair === "black") return "player-brother-dark.jpg";
-      if (hair === "brown" || skin === "medium") return "player-brother-brown.jpg";
+    if (["Older Brother", "Younger Brother", "Cousin", "Uncle"].includes(role)) {
+      if (tone === "dark") return "player-brother-dark.jpg";
+      if (tone === "medium") return "player-brother-brown.jpg";
       return "player-brother.jpg";
     }
-    if (role === "Older Sister" || role === "Aunt") {
-      if (skin === "dark" || hair === "black") return "player-sister-dark.jpg";
-      if (hair === "blond" || skin === "light") return "player-sister-blond.jpg";
+    if (["Older Sister", "Aunt"].includes(role)) {
+      if (tone === "dark") return "player-sister-dark.jpg";
+      if (tone === "light") return "player-sister-blond.jpg";
       return "player-sister.jpg";
     }
+    if (tone === "dark") return "player-brother-dark.jpg";
+    if (tone === "light") return "player-brother.jpg";
     return "player-brother-brown.jpg";
   }
 
@@ -478,11 +482,36 @@
         { label: "You sell any of those bubble things or spitballs?", fn: () => buyFromRusty() }
       ]);
     } else if (state.flags.talkedRusty === 2) {
+      if (hasItem("locket") && !state.flags.locketReturned) {
+        say("Rusty", "You again— hold on. That locket. Where'd you get that?", [
+          { label: "Found it in the woods near a campground", fn: () => {
+            useItem("locket");
+            state.flags.locketReturned = true;
+            change("morale", 6);
+            change("money", 15, "Rusty presses a worn $15 into your hand.");
+            toast("Side quest done: Returned the locket");
+            say("Rusty", "Belonged to my sister. Lost it years ago on a trip. Thank you.", [
+              { label: "Glad it found its way back", fn: () => {} }
+            ]);
+          }},
+          { label: "None of your business", fn: () => {
+            change("morale", -2);
+            state.flags.rustyWantsLocket = true;
+          }}
+        ]);
+        return;
+      }
       say("Rusty", "You again. Still here?", [
         { label: "Yeah, just checking things", fn: () => say("Rusty", "Don't check too hard. Last person who 'checked' something walked off with a whole cooler.") },
         { label: "Has the other family calmed down?", fn: () => {
           if (state.flags.rivalState === "truce") say("Rusty", "Surprisingly, yes. Whatever you said worked.");
           else say("Rusty", "No. They're still circling like hawks.");
+        }},
+        { label: "You ever lose anything important?", fn: () => {
+          state.flags.rustyWantsLocket = true;
+          say("Rusty", "A locket. Years ago. If you ever see one in the dirt out on the road… I'd want to know.", [
+            { label: "I'll watch for it", fn: () => toast("Side quest: Find a lost locket") }
+          ]);
         }}
       ]);
     } else {
@@ -792,21 +821,59 @@
   function campFire() {
     say("Campfire", "A low fire is going at the next site over. Two people are talking in low voices.", [
       { label: "Join them politely", fn: () => {
-        say("Camper", "Evening. You with the painted van? Saw a guy circling your lot earlier. Hood up. Didn't look friendly.", [
-          { label: "Thanks for telling us", fn: () => {
-            change("morale", 4);
+        if (state.flags.batteriesDelivered) {
+          say("Camper", "Thanks again for those batteries. Radio works. We owe you one.", [
+            { label: "Anytime", fn: () => change("morale", 2) }
+          ]);
+          return;
+        }
+        if (hasItem("batteries") && state.flags.camperNeedsBatteries) {
+          say("Camper", "Wait — are those AA batteries? Our radio died. Any chance we could take them?", [
+            { label: "Give them the batteries", fn: () => {
+              useItem("batteries");
+              state.flags.batteriesDelivered = true;
+              change("morale", 8, "They light up. Literally.");
+              change("money", 5, "They insist on five bucks.");
+              toast("Side quest done: Batteries delivered");
+            }},
+            { label: "Not right now", fn: () => {} }
+          ]);
+          return;
+        }
+        say("Camper", "Evening. You with the painted van? Saw a guy circling your lot earlier. Hood up.", [
+          { label: "Thanks for the warning", fn: () => {
+            change("morale", 3);
             state.flags.campWarned = true;
+            state.flags.camperNeedsBatteries = true;
+            say("Camper", "If you find spare AA batteries out there, we could use them. Radio's dead.", [
+              { label: "I'll keep an eye out", fn: () => toast("Side quest: Find AA batteries for the campers") }
+            ]);
           }},
           { label: "Ask who it was", fn: () => {
-            say("Camper", "Didn't get a name. Thin, kept his hands in his pockets. Hangs near the trees after dark.", [
-              { label: "Got it", fn: () => { state.flags.campWarned = true; change("morale", 2); } }
+            state.flags.campWarned = true;
+            state.flags.camperNeedsBatteries = true;
+            say("Camper", "Thin, hood up, hangs by the trees. Also — our radio died. Need AA batteries if you see any.", [
+              { label: "Got it", fn: () => change("morale", 2) }
             ]);
           }}
         ]);
       }},
       { label: "Listen from a distance", fn: () => {
-        say("You", "You catch bits of talk about missing coolers and a ranger who stopped by last night.", [
-          { label: "Interesting", fn: () => change("morale", 1) }
+        say("You", "Talk about missing coolers, a ranger, and a dead radio.", [
+          { label: "Interesting", fn: () => {
+            state.flags.camperNeedsBatteries = true;
+            change("morale", 1);
+          }}
+        ]);
+      }},
+      { label: "Cause trouble at their fire", fn: () => {
+        say("You", "Bad idea… or is it?", [
+          { label: "Kick dirt at the fire", fn: () => {
+            change("heat", 8);
+            change("morale", -6, "They shout. You leave fast.");
+            state.flags.causedForestTrouble = true;
+          }},
+          { label: "Never mind", fn: () => {} }
         ]);
       }},
       { label: "Walk away", fn: () => {} }
@@ -881,15 +948,82 @@
         say("You", "Nobody answers. A branch snaps farther in.", [
           { label: "Go back to the fire", fn: () => {} },
           { label: "Wait and watch", fn: () => {
-            if (state.flags.shadyDealt) {
-              change("morale", 2, "Nothing else moves. You head back.");
-            } else {
-              change("morale", -4, "You feel watched the whole way back.");
-            }
+            if (state.flags.shadyDealt) change("morale", 2, "Nothing else moves.");
+            else change("morale", -4, "You feel watched the whole way back.");
           }}
         ]);
       }},
+      { label: "Go into the forest", fn: () => enterForest() },
+      { label: "Cause some trouble", fn: () => forestTrouble() },
       { label: "Don't go in", fn: () => change("morale", 1, "Smart.") }
+    ]);
+  }
+
+  function enterForest() {
+    state.flags.forestExplored = true;
+    say("Deep in the Pines", "The path narrows. Your flashlight catches something metallic under a root.", [
+      { label: "Pick it up", fn: () => {
+        if (!state.flags.foundLocket) {
+          state.flags.foundLocket = true;
+          state.inventory.push({ id: "locket", name: "Tarnished Locket", desc: "Old photo inside. Someone might want this back.", qty: 1 });
+          change("morale", 3, "You pocket a tarnished locket.");
+          toast("Item found: Tarnished Locket");
+        } else {
+          toast("You've already searched here.");
+        }
+        say("Forest", "Farther in, a fallen log hides a small plastic pack.", [
+          { label: "Check the pack", fn: () => {
+            if (!state.flags.foundBatteries) {
+              state.flags.foundBatteries = true;
+              state.inventory.push({ id: "batteries", name: "AA Batteries", desc: "Still good. Useful for someone.", qty: 1 });
+              toast("Item found: AA Batteries");
+            }
+            say("Forest", "That's enough exploring for now.", [
+              { label: "Head back", fn: () => {} }
+            ]);
+          }},
+          { label: "Leave it", fn: () => {} }
+        ]);
+      }},
+      { label: "Keep walking deeper", fn: () => {
+        say("Forest", "You push farther than you should. A figure shifts between trees — then it's gone.", [
+          { label: "Get out of here", fn: () => {
+            change("morale", -5, "Your heart is still racing.");
+            if (!state.flags.shadyDealt) change("heat", 2);
+          }},
+          { label: "Chase it", fn: () => {
+            change("morale", -8);
+            change("heat", 4, "You trip, scramble up, and run back to camp.");
+            state.flags.causedForestTrouble = true;
+          }}
+        ]);
+      }},
+      { label: "Turn back", fn: () => {} }
+    ]);
+  }
+
+  function forestTrouble() {
+    say("You", "You could make some noise. Scare people. Or worse.", [
+      { label: "Throw spitballs into the dark", fn: () => {
+        if (!hasItem("spitballs")) { toast("No spitballs left."); return; }
+        useItem("spitballs", 2);
+        change("heat", 6);
+        change("morale", -2, "Something yelps. Then silence.");
+        state.flags.causedForestTrouble = true;
+      }},
+      { label: "Shout and bang on trees", fn: () => {
+        change("heat", 5);
+        change("morale", -3, "Lights flick on at other sites. A dog starts barking.");
+        state.flags.causedForestTrouble = true;
+      }},
+      { label: "Leave sticky gum on a trail marker", fn: () => {
+        if (!hasItem("gum")) { toast("No gum left."); return; }
+        useItem("gum");
+        change("heat", 3);
+        toast("Petty. Effective. Heat up a little.");
+        state.flags.causedForestTrouble = true;
+      }},
+      { label: "Never mind", fn: () => {} }
     ]);
   }
 
