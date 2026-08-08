@@ -340,25 +340,35 @@
 
   
   function familyTone() {
-    // Shared family look from player choices
     const skin = state.playerSkin || "medium";
     const hair = state.playerHair || "brown";
+    if (hair === "red") return "red";
     if (skin === "dark" || hair === "black") return "dark";
     if (skin === "light" || hair === "blond") return "light";
-    if (hair === "red") return "light";
-    return "medium"; // brown/tan/medium
+    return "medium";
   }
 
   function getPlayerSpriteSrc() {
     const role = state.playerRole || "Older Sister";
     const tone = familyTone();
-    if (role === "Dad") return tone === "light" ? "player-dad-light.jpg" : "player-dad.jpg";
-    if (role === "Mom") return (tone === "medium" || tone === "dark") ? "player-mom-medium.jpg" : "player-mom.jpg";
+    if (role === "Dad") {
+      if (tone === "light") return "player-dad-light.jpg";
+      if (tone === "dark") return "player-dad-dark.jpg";
+      return "player-dad.jpg";
+    }
+    if (role === "Mom") {
+      if (tone === "dark") return "player-mom-dark.jpg";
+      if (tone === "medium") return "player-mom-medium.jpg";
+      return "player-mom.jpg";
+    }
     if (role === "Older Brother" || role === "Younger Sibling") {
+      if (tone === "red") return "player-brother-red.jpg";
       if (tone === "dark") return "player-brother-dark.jpg";
       if (tone === "medium") return "player-brother-brown.jpg";
       return "player-brother.jpg";
     }
+    // sister / default
+    if (tone === "red") return "player-sister-red.jpg";
     if (tone === "dark") return "player-sister-dark.jpg";
     if (tone === "light") return "player-sister-blond.jpg";
     return "player-sister.jpg";
@@ -368,21 +378,33 @@
     if (!member || member.isPlayer) return getPlayerSpriteSrc();
     const role = member.role || member.name || "";
     const tone = familyTone();
-    // Same tone as player so the whole family matches
-    if (role === "Dad") return tone === "light" ? "player-dad-light.jpg" : "player-dad.jpg";
-    if (role === "Mom") return (tone === "medium" || tone === "dark") ? "player-mom-medium.jpg" : "player-mom.jpg";
-    if (role === "Little Sister") return "player-littlesis.jpg";
+    if (role === "Dad") {
+      if (tone === "light") return "player-dad-light.jpg";
+      if (tone === "dark") return "player-dad-dark.jpg";
+      return "player-dad.jpg";
+    }
+    if (role === "Mom") {
+      if (tone === "dark") return "player-mom-dark.jpg";
+      if (tone === "medium") return "player-mom-medium.jpg";
+      return "player-mom.jpg";
+    }
+    if (role === "Little Sister") {
+      return tone === "dark" ? "player-littlesis-dark.jpg" : "player-littlesis.jpg";
+    }
     if (["Older Brother", "Younger Brother", "Cousin", "Uncle"].includes(role)) {
+      if (tone === "red") return "player-brother-red.jpg";
       if (tone === "dark") return "player-brother-dark.jpg";
       if (tone === "medium") return "player-brother-brown.jpg";
       return "player-brother.jpg";
     }
     if (["Older Sister", "Aunt"].includes(role)) {
+      if (tone === "red") return "player-sister-red.jpg";
       if (tone === "dark") return "player-sister-dark.jpg";
       if (tone === "light") return "player-sister-blond.jpg";
       return "player-sister.jpg";
     }
     if (tone === "dark") return "player-brother-dark.jpg";
+    if (tone === "red") return "player-brother-red.jpg";
     if (tone === "light") return "player-brother.jpg";
     return "player-brother-brown.jpg";
   }
@@ -426,24 +448,67 @@
     movePlayerTo(target, null);
   }
 
+
+  function offerTrouble(context, extraChoices = []) {
+    const base = [
+      { label: "Keep it peaceful", fn: () => {} },
+      { label: "Mouth off / insult", fn: () => {
+        change("heat", 4);
+        change("morale", -2, "You made it worse.");
+      }},
+      { label: "Steal something nearby", fn: () => {
+        change("heat", 8);
+        change("money", 5);
+        change("morale", -3, "Quick sticky fingers. Heat up.");
+      }},
+      { label: "Pull out a weapon", fn: () => {
+        say("You", "What do you use?", [
+          { label: "Bubbles", fn: () => {
+            if (!hasItem("bubbles")) { toast("No bubbles."); return; }
+            useItem("bubbles");
+            change("heat", 6);
+            change("morale", 3, "Bubbles everywhere.");
+          }},
+          { label: "Spitballs", fn: () => {
+            if (!hasItem("spitballs")) { toast("No spitballs."); return; }
+            useItem("spitballs", 2);
+            change("heat", 7);
+            change("morale", -1, "That escalated.");
+          }},
+          { label: "Gum in hair / on surface", fn: () => {
+            if (!hasItem("gum")) { toast("No gum."); return; }
+            useItem("gum");
+            change("heat", 5);
+            toast("Sticky chaos.");
+          }},
+          { label: "Never mind", fn: () => {} }
+        ]);
+      }},
+      { label: "Vandalize / make a mess", fn: () => {
+        change("heat", 9);
+        change("morale", -4, "Someone's going to notice.");
+      }}
+    ];
+    say(context || "Trouble", "How do you want to handle this?", base.concat(extraChoices));
+  }
+
   function movePlayerTo(targetX, onArrive) {
     const p = ensurePlayerSprite();
     state.playerTargetX = targetX;
     state.playerMoving = true;
     state.pendingAction = onArrive || null;
+    p.classList.add("walking");
 
-    // face direction
     if (targetX > state.playerX) p.classList.remove("flipped");
     else p.classList.add("flipped");
 
     const start = state.playerX;
     const dist = Math.abs(targetX - start);
-    const duration = Math.max(300, dist * 28); // ms
+    const duration = Math.max(300, dist * 28);
     const t0 = performance.now();
 
     function step(now) {
       const t = Math.min(1, (now - t0) / duration);
-      // ease
       const ease = t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
       state.playerX = start + (targetX - start) * ease;
       p.style.left = state.playerX + "%";
@@ -453,6 +518,7 @@
         state.playerMoving = false;
         state.playerX = targetX;
         p.style.left = targetX + "%";
+        p.classList.remove("walking");
         if (state.pendingAction) {
           const fn = state.pendingAction;
           state.pendingAction = null;
@@ -1020,7 +1086,7 @@
   function enterForest() {
     state.flags.forestExplored = true;
     clearSprites();
-    $("#scene-bg").className = "campground";
+    $("#scene-bg").className = "forest";
     $("#scene-title").textContent = "Deep Woods";
     if (!state.flags.shadyDealt) addSprite("char-shady.jpg", "shady");
     const hs = $("#hotspots");
@@ -1280,6 +1346,7 @@
             change("morale", 3, "Coffee helps a little.");
           }
         }},
+        { label: "Cause trouble", fn: () => offerTrouble("Waitress") },
         { label: "How's the road look from here?", fn: () => {
           say("Waitress", "Quiet until the campground. Rangers have been checking coolers and bags more than usual this week.", [
             { label: "Good to know", fn: () => change("morale", 2) }
@@ -1320,6 +1387,13 @@
         addOrStack(item);
         change("morale", 2, "Got: " + item.name);
       }},
+      { label: "Cause trouble / steal junk", fn: () => offerTrouble("Gift Shelf", [
+        { label: "Pocket something without paying", fn: () => {
+          change("heat", 12);
+          addOrStack({ id: "keychain", name: "State Keychain", desc: "Stolen", qty: 1 });
+          toast("Stolen keychain. Heat way up.");
+        }}
+      ])},
       { label: "Leave it", fn: () => {} }
     ]);
   }
@@ -1400,6 +1474,12 @@
           change("morale", 5, "It's bad. It's perfect.");
         }
       }},
+      { label: "Cause trouble", fn: () => offerTrouble("Jukebox", [
+        { label: "Smash the buttons", fn: () => {
+          change("heat", 10);
+          change("morale", -5, "The whole diner stares.");
+        }}
+      ])},
       { label: "Don't bother", fn: () => {} }
     ]);
   }
@@ -1556,6 +1636,225 @@
     say(scene.speaker, scene.text, scene.choices);
   }
 
+
+  // ---------- DRIVING MINI-GAME ----------
+  const drive = {
+    running: false,
+    raf: null,
+    lane: 1, // 0 left 1 mid 2 right
+    speed: 40,
+    boosting: false,
+    braking: false,
+    dist: 0,
+    goal: 12, // miles
+    obstacles: [],
+    cops: [],
+    roadOffset: 0,
+    lastSpawn: 0,
+    crashed: false
+  };
+
+  function startHighway() {
+    show("drive");
+    const canvas = $("#drive-canvas");
+    const resize = () => {
+      canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
+      canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
+    };
+    resize();
+    drive.running = true;
+    drive.lane = 1;
+    drive.speed = 40;
+    drive.boosting = false;
+    drive.braking = false;
+    drive.dist = 0;
+    drive.goal = state.difficulty === "hard" ? 16 : 12;
+    drive.obstacles = [];
+    drive.cops = [];
+    drive.roadOffset = 0;
+    drive.lastSpawn = 0;
+    drive.crashed = false;
+    bindDriveControls();
+    const loop = (t) => {
+      if (!drive.running) return;
+      updateDrive(t);
+      drawDrive(canvas);
+      drive.raf = requestAnimationFrame(loop);
+    };
+    drive.raf = requestAnimationFrame(loop);
+  }
+
+  function stopDrive() {
+    drive.running = false;
+    if (drive.raf) cancelAnimationFrame(drive.raf);
+  }
+
+  function bindDriveControls() {
+    const stage = $("#drive-stage");
+    const canvas = $("#drive-canvas");
+    let startX = null;
+    const onStart = (x) => { startX = x; };
+    const onMove = (x) => {
+      if (startX == null) return;
+      const dx = x - startX;
+      if (dx > 40) { drive.lane = Math.min(2, drive.lane + 1); startX = x; }
+      if (dx < -40) { drive.lane = Math.max(0, drive.lane - 1); startX = x; }
+    };
+    const onEnd = () => { startX = null; };
+    stage.ontouchstart = (e) => { onStart(e.touches[0].clientX); };
+    stage.ontouchmove = (e) => { e.preventDefault(); onMove(e.touches[0].clientX); };
+    stage.ontouchend = onEnd;
+    stage.onmousedown = (e) => { onStart(e.clientX); };
+    stage.onmousemove = (e) => { if (e.buttons) onMove(e.clientX); };
+    stage.onmouseup = onEnd;
+
+    $("#btn-boost").onpointerdown = () => { drive.boosting = true; };
+    $("#btn-boost").onpointerup = () => { drive.boosting = false; };
+    $("#btn-boost").onpointerleave = () => { drive.boosting = false; };
+    $("#btn-brake").onpointerdown = () => { drive.braking = true; };
+    $("#btn-brake").onpointerup = () => { drive.braking = false; };
+    $("#btn-brake").onpointerleave = () => { drive.braking = false; };
+    $("#btn-drive-exit").onclick = () => {
+      stopDrive();
+      change("gas", -5);
+      show("hub");
+      log("Pulled off the highway early.");
+    };
+  }
+
+  let driveLastT = 0;
+  function updateDrive(t) {
+    if (!driveLastT) driveLastT = t;
+    const dt = Math.min(0.05, (t - driveLastT) / 1000);
+    driveLastT = t;
+
+    let target = 45;
+    if (drive.boosting) target = 90;
+    if (drive.braking) target = 18;
+    drive.speed += (target - drive.speed) * Math.min(1, dt * 3);
+
+    const move = drive.speed * dt * 0.08;
+    drive.dist += move;
+    drive.roadOffset += drive.speed * dt * 8;
+
+    // spawn
+    drive.lastSpawn += dt;
+    const rate = state.difficulty === "hard" ? 0.7 : 1.1;
+    if (drive.lastSpawn > rate) {
+      drive.lastSpawn = 0;
+      if (Math.random() > 0.35) {
+        drive.obstacles.push({ lane: Math.floor(Math.random() * 3), y: -0.1, type: Math.random() > 0.7 ? "cone" : "car" });
+      }
+      if (Math.random() > 0.82) {
+        drive.cops.push({ lane: Math.floor(Math.random() * 3), y: -0.15, seen: false });
+      }
+    }
+
+    const scroll = drive.speed * dt * 0.35;
+    drive.obstacles.forEach(o => o.y += scroll * 0.02);
+    drive.cops.forEach(c => c.y += scroll * 0.02);
+    drive.obstacles = drive.obstacles.filter(o => o.y < 1.2);
+    drive.cops = drive.cops.filter(c => c.y < 1.2);
+
+    // collisions
+    drive.obstacles.forEach(o => {
+      if (o.hit) return;
+      if (o.lane === drive.lane && o.y > 0.72 && o.y < 0.92) {
+        o.hit = true;
+        change("morale", -4);
+        change("gas", -2);
+        toast("Hit something!");
+        drive.speed *= 0.5;
+        if (state.difficulty !== "easy" && Math.random() > 0.85) {
+          change("heat", 3);
+        }
+      }
+    });
+    drive.cops.forEach(c => {
+      if (c.lane === drive.lane && c.y > 0.7 && c.y < 0.95) {
+        if (drive.speed > 55 && !drive.braking) {
+          change("heat", 8);
+          toast("Cop clocked you speeding!");
+          c.y = 2;
+          if (state.resources.heat > 40 && state.difficulty !== "easy") {
+            stopDrive();
+            getArrested(1, "Highway patrol pulled you over. Lost a day.");
+            return;
+          }
+        } else if (drive.braking) {
+          toast("You slowed for the patrol. Smart.");
+          c.y = 2;
+        }
+      }
+    });
+
+    $("#drive-speed").textContent = "Speed " + Math.round(drive.speed);
+    $("#drive-dist").textContent = drive.dist.toFixed(1) + " / " + drive.goal + " mi";
+    $("#drive-heat").textContent = "🚨 " + state.resources.heat;
+
+    if (drive.dist >= drive.goal) {
+      stopDrive();
+      change("gas", -12);
+      change("morale", 6, "Made it to Twin Lakes overlook.");
+      state.statesVisited++;
+      show("hub");
+      log("Arrived via Twin Lakes Highway.");
+      say("Twin Lakes", "You pull off at a scenic overlook. The family piles out for photos.", [
+        { label: "Nice drive", fn: () => {} },
+        { label: "Cause trouble at the overlook", fn: () => offerTrouble("Overlook") }
+      ]);
+    }
+  }
+
+  function drawDrive(canvas) {
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    ctx.fillStyle = "#3d5c3d";
+    ctx.fillRect(0, 0, w, h);
+    // road
+    const roadW = w * 0.55;
+    const roadX = (w - roadW) / 2;
+    ctx.fillStyle = "#444";
+    ctx.fillRect(roadX, 0, roadW, h);
+    // lanes
+    ctx.strokeStyle = "#ccc";
+    ctx.setLineDash([h * 0.04, h * 0.05]);
+    ctx.lineWidth = 3;
+    ctx.lineDashOffset = -drive.roadOffset % 80;
+    for (let i = 1; i <= 2; i++) {
+      const x = roadX + (roadW / 3) * i;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // obstacles
+    const laneW = roadW / 3;
+    drive.obstacles.forEach(o => {
+      const x = roadX + o.lane * laneW + laneW * 0.2;
+      const y = o.y * h;
+      ctx.fillStyle = o.type === "cone" ? "#e67e22" : "#2980b9";
+      ctx.fillRect(x, y, laneW * 0.6, h * 0.08);
+    });
+    drive.cops.forEach(c => {
+      const x = roadX + c.lane * laneW + laneW * 0.15;
+      const y = c.y * h;
+      ctx.fillStyle = "#1a1a2e";
+      ctx.fillRect(x, y, laneW * 0.7, h * 0.09);
+      ctx.fillStyle = "#3498db";
+      ctx.fillRect(x, y, laneW * 0.7, h * 0.02);
+    });
+    // player car
+    const px = roadX + drive.lane * laneW + laneW * 0.15;
+    const py = h * 0.78;
+    ctx.fillStyle = "#f0b429";
+    ctx.fillRect(px, py, laneW * 0.7, h * 0.12);
+    ctx.fillStyle = "#2c3e50";
+    ctx.fillRect(px + laneW * 0.1, py + h * 0.02, laneW * 0.5, h * 0.04);
+  }
+
+
   // ---------- WIRE UP ----------
   function init() {
     $("#family-size").addEventListener("change", buildFamilySetupUI);
@@ -1638,6 +1937,12 @@
         change("food", -3 - Math.floor(state.familySize / 3));
         if (Math.random() > 0.35) advanceDay("Miles go by.");
 
+        if (dest === "highway") {
+          change("gas", -4); // extra gas handled in drive
+          startHighway();
+          log("Merging onto Twin Lakes Highway.");
+          return;
+        }
         if (dest === "reststop") { enterReststop(); log("Stopped at Rusty's."); }
         else if (dest === "campground") { enterCampground(); }
         else if (dest === "diner") { enterDiner(); log("Pulled into the diner."); }

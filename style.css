@@ -233,20 +233,22 @@ h2 {
 }
 
 #scene-bg.diner {
-  background: linear-gradient(180deg, #1a1a2e 0%, #1a1a2e 35%, #2d2d44 35%, #1f1f2e 100%);
+  background-image: url("bg-diner.jpg");
+  background-size: cover;
+  background-position: center;
 }
 
-#scene-bg.diner::after {
-  content: "NEON DINER";
-  position: absolute;
-  top: 14%;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #ff6b6b;
-  font-weight: 800;
-  font-size: 1.3rem;
-  letter-spacing: 2px;
-  text-shadow: 0 0 12px #ff6b6b;
+#scene-bg.forest {
+  background-image: url("bg-forest.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
+.scene-sprite.ranger {
+  bottom: 8%;
+  left: 55%;
+  height: 42%;
+  max-width: 26%;
 }
 
 /* Character / object sprites in scene */
@@ -523,4 +525,130 @@ h2 {
   height: 40%;
   max-width: 24%;
   filter: drop-shadow(0 4px 8px rgba(0,0,0,0.55));
+}
+
+/* Landscape-first layout */
+@media (orientation: landscape) {
+  .screen {
+    padding: 8px 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: flex-start;
+  }
+  #screen-title, #screen-family, #screen-hub, #screen-map {
+    flex-direction: column;
+    align-items: center;
+  }
+  #screen-hub .resources {
+    flex-wrap: nowrap;
+  }
+  #scene-stage {
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+  }
+  .player-sprite {
+    height: 48%;
+  }
+  .family-card {
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .destinations {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    max-width: 90%;
+  }
+  .destinations .btn {
+    width: auto;
+    min-width: 180px;
+  }
+}
+
+/* Walk bob animation */
+.player-sprite.walking {
+  animation: walk-bob 0.28s ease-in-out infinite;
+}
+@keyframes walk-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6%); }
+}
+.player-sprite.walking.flipped {
+  animation: walk-bob-flip 0.28s ease-in-out infinite;
+}
+@keyframes walk-bob-flip {
+  0%, 100% { transform: scaleX(-1) translateY(0); }
+  50% { transform: scaleX(-1) translateY(-6%); }
+}
+
+/* Driving mini-game */
+#screen-drive {
+  padding: 0 !important;
+  background: #111;
+}
+#drive-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
+#drive-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #2a3a2a;
+}
+#drive-hud {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  right: 48px;
+  display: flex;
+  gap: 16px;
+  color: #fff;
+  font-weight: 700;
+  text-shadow: 0 1px 3px #000;
+  z-index: 5;
+  pointer-events: none;
+}
+#drive-controls {
+  position: absolute;
+  bottom: 16px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 5;
+  padding: 0 12px;
+}
+.drive-btn {
+  background: #c0392b;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 22px;
+  font-size: 1rem;
+  font-weight: 700;
+  min-width: 90px;
+}
+.drive-btn.boost {
+  background: #27ae60;
+}
+.drive-btn:active {
+  opacity: 0.75;
+}
+#drive-steer-hint {
+  color: rgba(255,255,255,0.7);
+  font-size: 0.85rem;
+}
+.drive-exit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
 }

@@ -124,8 +124,26 @@
         <button class="btn dest" data-dest="reststop">Rusty's Roadside Rest Stop</button>
         <button class="btn dest" data-dest="campground">Shady Pines Campground</button>
         <button class="btn dest" data-dest="diner">Neon Diner & Gift Shop</button>
+        <button class="btn dest primary" data-dest="highway">Drive: Twin Lakes Highway</button>
       </div>
       <button id="btn-map-back" class="btn secondary">Back to Camper</button>
+    </section>
+
+    <section id="screen-drive" class="screen">
+      <div id="drive-stage">
+        <canvas id="drive-canvas"></canvas>
+        <div id="drive-hud">
+          <span id="drive-speed">Speed 0</span>
+          <span id="drive-dist">0 mi</span>
+          <span id="drive-heat">🚨 0</span>
+        </div>
+        <div id="drive-controls">
+          <button id="btn-brake" class="drive-btn">Brake</button>
+          <div id="drive-steer-hint">Swipe to steer</div>
+          <button id="btn-boost" class="drive-btn boost">Speed</button>
+        </div>
+        <button id="btn-drive-exit" class="icon-btn drive-exit">✕</button>
+      </div>
     </section>
 
     <section id="screen-scene" class="screen">
