@@ -221,11 +221,13 @@
 
   function getOtherRoles(playerRole, count) {
     const pools = {
-      "Dad": ["Mom", "Older Sister", "Older Brother", "Younger Brother", "Little Sister", "Cousin"],
-      "Mom": ["Dad", "Older Sister", "Older Brother", "Younger Brother", "Little Sister", "Cousin"],
-      "Older Sister": ["Mom", "Dad", "Younger Brother", "Little Sister", "Cousin", "Uncle"],
-      "Older Brother": ["Mom", "Dad", "Younger Brother", "Little Sister", "Cousin", "Aunt"],
-      "Younger Sibling": ["Mom", "Dad", "Older Sister", "Older Brother", "Cousin", "Uncle"]
+      "Dad": ["Mom", "Older Sister", "Older Brother", "Younger Brother", "Little Sister", "Baby Boy"],
+      "Mom": ["Dad", "Older Sister", "Older Brother", "Younger Brother", "Little Sister", "Baby Girl"],
+      "Older Sister": ["Mom", "Dad", "Younger Brother", "Little Sister", "Baby Boy", "Cousin"],
+      "Older Brother": ["Mom", "Dad", "Younger Brother", "Little Sister", "Baby Girl", "Aunt"],
+      "Younger Sibling": ["Mom", "Dad", "Older Sister", "Older Brother", "Baby Boy", "Baby Girl"],
+      "Baby Boy": ["Mom", "Dad", "Older Sister", "Older Brother", "Little Sister", "Baby Girl"],
+      "Baby Girl": ["Mom", "Dad", "Older Sister", "Older Brother", "Younger Brother", "Baby Boy"]
     };
     const list = pools[playerRole] || pools["Older Sister"];
     return list.slice(0, count);
@@ -269,7 +271,10 @@
       name: "You",
       role: state.playerRole,
       personality: state.playerPersonality,
-      isPlayer: true
+      isPlayer: true,
+      hp: 100,
+      maxHp: 100,
+      status: "ok" // ok | arrested | lost
     }];
     const selects = $$(".member-personality");
     selects.forEach((sel) => {
@@ -278,11 +283,14 @@
         name: role,
         role: role,
         personality: sel.value,
-        isPlayer: false
+        isPlayer: false,
+        hp: 100,
+        maxHp: 100,
+        status: "ok"
       });
     });
     while (state.family.length < state.familySize) {
-      state.family.push({ name: "Family", role: "Family", personality: "quiet", isPlayer: false });
+      state.family.push({ name: "Family", role: "Family", personality: "quiet", isPlayer: false, hp: 100, maxHp: 100, status: "ok" });
     }
   }
 
@@ -294,8 +302,15 @@
     $("#res-money").textContent = state.resources.money;
     $("#res-morale").textContent = state.resources.morale;
     $("#res-heat").textContent = state.resources.heat;
-    const names = state.family.map(f => f.isPlayer ? `You (${f.role})` : `${f.name} (${personalities[f.personality]?.label || f.personality})`);
-    $("#family-line").textContent = names.join(" · ");
+    const player = state.family.find(f => f.isPlayer);
+    if (player && $("#res-hp")) $("#res-hp").textContent = Math.round(player.hp);
+    renderFamilyHealth();
+    const active = state.family.filter(f => f.status === "ok");
+    const names = active.map(f => f.isPlayer ? `You (${f.role})` : `${f.name}`);
+    const missing = state.family.filter(f => f.status !== "ok");
+    let line = names.join(" · ");
+    if (missing.length) line += " · (" + missing.map(m => m.name + " " + m.status).join(", ") + ")";
+    $("#family-line").textContent = line;
 
     // portraits
     try {
@@ -313,7 +328,8 @@
         const src = getFamilyMemberSprite(f);
         img.src = src;
         img.alt = f.name || f.role;
-        const label = (f.isPlayer ? "You (" + f.role + ")" : f.name) + " – " + (personalities[f.personality]?.label || f.personality || "");
+        if (f.status && f.status !== "ok") img.style.opacity = "0.4";
+        const label = (f.isPlayer ? "You (" + f.role + ")" : f.name) + " – " + (personalities[f.personality]?.label || f.personality || "") + (f.status && f.status !== "ok" ? " [" + f.status + "]" : " · " + Math.round(f.hp||100) + " HP");
         img.title = label;
         img.onclick = () => openPortrait(src, label);
         box.appendChild(img);
@@ -360,7 +376,13 @@
     if (state.difficulty === "hard") drain += 2;
     if (state.difficulty === "easy") drain = Math.max(1, drain - 2);
     change("food", -drain);
-    if (state.resources.food < 12) change("morale", -7, "Everyone's getting hungry.");
+    if (state.resources.food < 12) {
+      change("morale", -7, "Everyone's getting hungry.");
+      activeFamily().forEach(m => damageMember(m, 3));
+    } else {
+      // light recovery on good days
+      activeFamily().forEach(m => healMember(m, 2));
+    }
     if (state.resources.heat > 0) change("heat", -4);
     log(reason || `Day ${state.day}.`);
     updateHub();
@@ -391,28 +413,237 @@
     $("#game-over").classList.remove("hidden");
   }
 
+
+  function renderFamilyHealth() {
+    const box = $("#family-health");
+    if (!box) return;
+    box.innerHTML = "";
+    state.family.forEach(f => {
+      const card = document.createElement("div");
+      card.className = "fh-card" + (f.status === "lost" ? " gone" : "") + (f.status === "arrested" ? " arrested" : "");
+      const pct = Math.max(0, Math.round((f.hp / (f.maxHp || 100)) * 100));
+      const label = f.isPlayer ? "You" : (f.name || f.role);
+      let statusTxt = f.status === "ok" ? pct + " HP" : f.status.toUpperCase();
+      card.innerHTML = '<div class="fh-name">' + label + '</div>' +
+        '<div class="fh-bar"><div class="fh-fill' + (pct < 30 ? ' low' : '') + '" style="width:' + (f.status === "ok" ? pct : 0) + '%"></div></div>' +
+        '<div class="fh-status">' + statusTxt + '</div>';
+      box.appendChild(card);
+    });
+  }
+
+  function damageMember(member, amount, reason) {
+    if (!member || member.status !== "ok") return;
+    member.hp = Math.max(0, member.hp - amount);
+    if (member.isPlayer) {
+      if ($("#res-hp")) $("#res-hp").textContent = Math.round(member.hp);
+      if (member.hp <= 0) {
+        if (state.difficulty === "easy") {
+          member.hp = 15;
+          change("morale", -10, "You nearly collapsed, but crawl back up.");
+        } else {
+          gameOver(reason || "You're out of the fight. Trip over.");
+        }
+      }
+    } else if (member.hp <= 0) {
+      member.status = "lost";
+      member.hp = 0;
+      change("morale", -12, (member.name || "Someone") + " is out of the trip.");
+      log((member.name || "Family member") + " lost from the trip.");
+      toast((member.name || "Family") + " can't continue.");
+    }
+    renderFamilyHealth();
+  }
+
+  function healMember(member, amount) {
+    if (!member || member.status !== "ok") return;
+    member.hp = Math.min(member.maxHp || 100, member.hp + amount);
+    if (member.isPlayer && $("#res-hp")) $("#res-hp").textContent = Math.round(member.hp);
+    renderFamilyHealth();
+  }
+
+  function activeFamily() {
+    return state.family.filter(f => f.status === "ok");
+  }
+
+  function randomNonPlayer() {
+    const pool = state.family.filter(f => !f.isPlayer && f.status === "ok");
+    if (!pool.length) return null;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function arrestFamilyMember(member, days) {
+    if (!member || member.isPlayer) {
+      getArrested(days || 1, "You got locked up.");
+      return;
+    }
+    member.status = "arrested";
+    change("morale", -10, (member.name || "Family") + " got arrested.");
+    change("heat", -8);
+    change("money", -15);
+    for (let i = 0; i < (days || 1); i++) advanceDay("Waiting on bail paperwork.");
+    log((member.name || "Family member") + " arrested.");
+    say("Arrest", (member.name || "A family member") + " is in holding. The rest of you keep going — for now.", [
+      { label: "Bail them out later ($40)", fn: () => {
+        if (state.resources.money >= 40) {
+          change("money", -40);
+          member.status = "ok";
+          member.hp = Math.max(40, member.hp);
+          change("morale", 6, "Back together.");
+          toast(member.name + " is free.");
+        } else {
+          toast("Not enough cash. They're stuck for now.");
+        }
+        renderFamilyHealth();
+        updateHub();
+      }},
+      { label: "Leave them for now", fn: () => {
+        toast(member.name + " stays locked up. Trip continues.");
+        renderFamilyHealth();
+        updateHub();
+      }}
+    ]);
+  }
+
+  // ----- Upbeat looping piano (Web Audio) -----
+  const music = { ctx: null, playing: true, timer: null, step: 0 };
+  const PIANO_MELODY = [
+    // catchy major loop in C
+    0,4,7,4, 9,7,4,0, 2,5,9,5, 7,4,0,4,
+    0,4,7,12, 11,9,7,4, 5,9,12,9, 7,4,2,0
+  ];
+  const PIANO_BASS = [0,0,5,5,7,7,0,0];
+
+  function ensureAudio() {
+    if (!music.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      music.ctx = new AC();
+    }
+    if (music.ctx.state === "suspended") music.ctx.resume();
+    return music.ctx;
+  }
+
+  function playPianoNote(freq, start, dur, gain) {
+    const ctx = music.ctx;
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    // soft triangle + slight detune for piano-ish
+    osc.type = "triangle";
+    osc.frequency.value = freq;
+    const osc2 = ctx.createOscillator();
+    osc2.type = "sine";
+    osc2.frequency.value = freq * 2;
+    const g2 = ctx.createGain();
+    g2.gain.value = gain * 0.25;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(gain, start + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    osc.connect(g); g.connect(ctx.destination);
+    osc2.connect(g2); g2.connect(ctx.destination);
+    g2.gain.setValueAtTime(0.0001, start);
+    g2.gain.exponentialRampToValueAtTime(gain * 0.2, start + 0.02);
+    g2.gain.exponentialRampToValueAtTime(0.0001, start + dur * 0.8);
+    osc.start(start); osc.stop(start + dur + 0.05);
+    osc2.start(start); osc2.stop(start + dur + 0.05);
+  }
+
+  function schedulePianoLoop() {
+    const ctx = ensureAudio();
+    if (!ctx || !music.playing) return;
+    const bpm = 112;
+    const beat = 60 / bpm;
+    const now = ctx.currentTime + 0.05;
+    const root = 261.63; // C4
+    const scale = [0,2,4,5,7,9,11,12]; // major
+    for (let i = 0; i < PIANO_MELODY.length; i++) {
+      const deg = PIANO_MELODY[i];
+      const octave = deg >= 12 ? 1 : 0;
+      const n = deg % 12;
+      // map chromatic from C major degrees approx
+      const semis = [0,2,4,5,7,9,11,12,14,16,17,19,21][deg] ?? deg;
+      const freq = root * Math.pow(2, semis / 12);
+      playPianoNote(freq, now + i * beat * 0.5, beat * 0.45, 0.08);
+    }
+    for (let i = 0; i < 8; i++) {
+      const semis = PIANO_BASS[i % PIANO_BASS.length];
+      const freq = root * Math.pow(2, (semis - 12) / 12);
+      playPianoNote(freq, now + i * beat, beat * 0.9, 0.05);
+    }
+    const loopMs = PIANO_MELODY.length * beat * 0.5 * 1000;
+    music.timer = setTimeout(schedulePianoLoop, loopMs - 30);
+  }
+
+  function startMusic() {
+    music.playing = true;
+    ensureAudio();
+    if (music.timer) clearTimeout(music.timer);
+    schedulePianoLoop();
+    const btn = $("#btn-music");
+    if (btn) btn.textContent = "♪ Music: On";
+  }
+
+  function stopMusic() {
+    music.playing = false;
+    if (music.timer) clearTimeout(music.timer);
+    music.timer = null;
+    const btn = $("#btn-music");
+    if (btn) btn.textContent = "♪ Music: Off";
+  }
+
+  function toggleMusic() {
+    if (music.playing) stopMusic();
+    else startMusic();
+  }
+
   function getArrested(daysLost, reason) {
     hideDialogue();
     clearSprites();
-    say("Arrested", reason || "You're in the back of a patrol car. The family is not happy.", [
-      { label: "Sit it out", fn: () => {
+    const other = randomNonPlayer();
+    const choices = [
+      { label: "You take the hit", fn: () => {
         for (let i = 0; i < daysLost; i++) advanceDay(i === 0 ? "Lost a day in holding." : "Another day wasted.");
         change("morale", -15);
         change("money", -20);
         change("heat", -Math.min(state.resources.heat, 25));
+        const you = state.family.find(f => f.isPlayer);
+        damageMember(you, 15, "Jail wore you down.");
         state.flags.policeDone = true;
         toast("Released. Heat down, morale wrecked.");
         show("hub");
-        log("Arrested. Lost " + daysLost + " day(s).");
-        if (state.difficulty === "medium" && daysLost >= 3) {
-          // long jail can end medium
-          if (state.resources.morale < 20) gameOver("After a long stint in holding, the trip fell apart.");
+        log("You arrested. Lost " + daysLost + " day(s).");
+        if (state.difficulty === "medium" && daysLost >= 3 && state.resources.morale < 20) {
+          gameOver("After a long stint in holding, the trip fell apart.");
         }
         if (state.difficulty === "hard" && daysLost >= 2 && state.resources.morale < 25) {
           gameOver("Jail time broke the trip. Everyone wants to go home.");
         }
       }}
-    ]);
+    ];
+    if (other) {
+      choices.push({
+        label: "Blame " + other.name + " (they get arrested)",
+        fn: () => {
+          state.flags.policeDone = true;
+          arrestFamilyMember(other, daysLost);
+        }
+      });
+    }
+    choices.push({
+      label: "Try to talk out of it",
+      fn: () => {
+        if (Math.random() > 0.45 || state.difficulty === "easy") {
+          change("heat", -5);
+          change("morale", 3, "Somehow it worked.");
+          toast("Talked your way out.");
+          show("hub");
+        } else {
+          toast("They didn't buy it.");
+          getArrested(daysLost, "Talking made it worse. Cuffs on.");
+        }
+      }
+    });
+    say("Arrested", reason || "You're in the back of a patrol car. The family is not happy.", choices);
   }
 
   function say(speaker, text, choices = []) {
@@ -542,6 +773,8 @@
       if (tone === "medium") return "player-brother-brown.png";
       return "player-brother.png";
     }
+    if (role === "Baby Boy") return "player-babyboy.png";
+    if (role === "Baby Girl") return "player-babygirl.png";
     // sister / default
     if (tone === "red") return "player-sister-red.png";
     if (tone === "dark") return "player-sister-dark.png";
@@ -566,6 +799,8 @@
     if (role === "Little Sister") {
       return tone === "dark" ? "player-littlesis-dark.png" : "player-littlesis.png";
     }
+    if (role === "Baby Boy") return "player-babyboy.png";
+    if (role === "Baby Girl") return "player-babygirl.png";
     if (["Older Brother", "Younger Brother", "Cousin", "Uncle"].includes(role)) {
       if (tone === "red") return "player-brother-red.png";
       if (tone === "dark") return "player-brother-dark.png";
@@ -735,24 +970,7 @@
       { label: "Vending", style: "left:82%;bottom:28%;width:14%;height:28%;", action: examineVending, x: 80 },
       { label: "Bench", style: "left:2%;top:52%;width:18%;height:12%;", action: examineBench, x: 14 }
     ];
-    spots.forEach(h => {
-      const el = document.createElement("div");
-      el.className = "hotspot" + (h.important ? " important" : "");
-      el.style.cssText = h.style;
-      el.textContent = h.label;
-      el.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (state.playerMoving) return;
-        // if already close, interact immediately
-        if (Math.abs(state.playerX - h.x) < 14) {
-          h.action();
-        } else {
-          walkThen(h.action, h.x);
-        }
-      };
-      hs.appendChild(el);
-    });
+    spots.forEach(h => hs.appendChild(makeHotspot(h)));
     show("scene");
     state.playerX = 18;
     ensureWalkLayer();
@@ -1071,20 +1289,7 @@
       { label: "Trees", style: "left:78%;bottom:20%;width:18%;height:40%;", action: campTrees, x: 80 },
       { label: "Path", style: "left:40%;bottom:4%;width:20%;height:14%;", action: campPath, x: 45 }
     ];
-    spots.forEach(h => {
-      const el = document.createElement("div");
-      el.className = "hotspot" + (h.important ? " important" : "");
-      el.style.cssText = h.style;
-      el.textContent = h.label;
-      el.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (state.playerMoving) return;
-        if (Math.abs(state.playerX - h.x) < 14) h.action();
-        else walkThen(h.action, h.x);
-      };
-      hs.appendChild(el);
-    });
+    spots.forEach(h => hs.appendChild(makeHotspot(h)));
     show("scene");
     state.playerX = 50;
     ensureWalkLayer();
@@ -1507,28 +1712,16 @@
     maybeStalkShady("diner");
     const hs = $("#hotspots");
     hs.innerHTML = "";
+    // Positions tuned to claymation diner background
     const spots = [
-      { label: "Waitress", style: "left:8%;bottom:6%;width:32%;height:50%;", important: true, action: talkWaitress, x: 16 },
-      { label: "Gift Shelf", style: "left:58%;bottom:20%;width:24%;height:26%;", action: examineGifts, x: 65 },
-      { label: "Jukebox", style: "left:6%;top:42%;width:18%;height:20%;", action: examineJukebox, x: 12 },
-      { label: "Guy at Counter", style: "left:42%;bottom:18%;width:22%;height:28%;", important: true, action: talkCounter, x: 48 }
+      { label: "Waitress", style: "left:4%;bottom:4%;width:26%;height:52%;", important: true, action: talkWaitress, x: 14 },
+      { label: "Jukebox", style: "left:30%;bottom:22%;width:16%;height:38%;", action: examineJukebox, x: 36 },
+      { label: "Guy at Counter", style: "left:48%;bottom:10%;width:18%;height:42%;", important: true, action: talkCounter, x: 54 },
+      { label: "Gift Shelf", style: "left:74%;bottom:22%;width:20%;height:42%;", action: examineGifts, x: 80 }
     ];
-    spots.forEach(h => {
-      const el = document.createElement("div");
-      el.className = "hotspot" + (h.important ? " important" : "");
-      el.style.cssText = h.style;
-      el.textContent = h.label;
-      el.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (state.playerMoving) return;
-        if (Math.abs(state.playerX - h.x) < 14) h.action();
-        else walkThen(h.action, h.x);
-      };
-      hs.appendChild(el);
-    });
+    spots.forEach(h => hs.appendChild(makeHotspot(h)));
     show("scene");
-    state.playerX = 30;
+    state.playerX = 22;
     ensureWalkLayer();
     ensurePlayerSprite();
   }
@@ -1949,6 +2142,11 @@
 
 
   // ---------- SPITBALL PICNIC MINIGAME ----------
+  const imgPicnic = new Image();
+  imgPicnic.src = "bg-picnic-fp.jpg";
+  const imgDrive = new Image();
+  imgDrive.src = "bg-drive-fp.jpg";
+
   const spit = { running: false, raf: null, score: 0, ammo: 12, targets: [], lastT: 0, time: 20 };
 
   function startSpitballGame() {
@@ -1980,10 +2178,11 @@
     spit.ammo = Math.min(12, state.inventory.find(i => i.id === "spitballs")?.qty || 0);
     spit.time = state.difficulty === "hard" ? 14 : (state.difficulty === "easy" ? 25 : 20);
     spit.targets = [
-      { x: 0.25, y: 0.45, w: 0.12, hit: 0 },
-      { x: 0.5, y: 0.4, w: 0.1, hit: 0 },
-      { x: 0.72, y: 0.48, w: 0.12, hit: 0 }
+      { x: 0.32, y: 0.48, w: 0.14, hit: 0, name: "Dad" },
+      { x: 0.50, y: 0.46, w: 0.12, hit: 0, name: "Mom" },
+      { x: 0.68, y: 0.48, w: 0.14, hit: 0, name: "Uncle" }
     ];
+    spit.balls = [];
     spit.lastT = 0;
     $("#drive-speed").textContent = "Spitballs";
     $("#drive-dist").textContent = spit.ammo + " left";
@@ -1999,10 +2198,12 @@
       const y = (clientY - rect.top) / rect.height;
       spit.ammo--;
       useItem("spitballs", 1);
+      if (!spit.balls) spit.balls = [];
+      spit.balls.push({ x: 0.5, y: 0.92, tx: x, ty: y, life: 0.35 });
       let hit = false;
       spit.targets.forEach(t => {
         if (t.hit >= 3) return;
-        if (x > t.x - t.w/2 && x < t.x + t.w/2 && y > t.y - 0.12 && y < t.y + 0.12) {
+        if (x > t.x - t.w/2 && x < t.x + t.w/2 && y > t.y - 0.14 && y < t.y + 0.14) {
           t.hit++;
           spit.score++;
           hit = true;
@@ -2039,9 +2240,20 @@
       spit.lastT = t;
       spit.time -= dt;
       // gentle sway targets
+      // slight idle sway on targets
       spit.targets.forEach((tg, i) => {
-        tg.x = 0.25 + i * 0.23 + Math.sin(t/400 + i) * 0.03;
+        const base = [0.32, 0.50, 0.68][i];
+        tg.x = base + Math.sin(t/500 + i) * 0.008;
       });
+      if (spit.balls) {
+        spit.balls.forEach(b => {
+          b.life -= dt;
+          const p = 1 - Math.max(0, b.life) / 0.35;
+          b.x = 0.5 + (b.tx - 0.5) * p;
+          b.y = 0.92 + (b.ty - 0.92) * p;
+        });
+        spit.balls = spit.balls.filter(b => b.life > 0);
+      }
       drawSpitball(canvas);
       if (spit.time <= 0 || spit.ammo <= 0 || spit.targets.every(t => t.hit >= 3)) {
         endSpitball(true);
@@ -2055,41 +2267,74 @@
   function drawSpitball(canvas) {
     const ctx = canvas.getContext("2d");
     const w = canvas.width, h = canvas.height;
-    // forest-ish bg
-    ctx.fillStyle = "#2d4a2d";
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#1a301a";
-    ctx.fillRect(0, h * 0.7, w, h * 0.3);
-    // log cover
-    ctx.fillStyle = "#5c3a1e";
-    ctx.fillRect(0, h * 0.72, w, h * 0.12);
-    ctx.fillStyle = "#3d2810";
-    ctx.fillRect(0, h * 0.78, w, h * 0.06);
-    // picnic blanket
-    ctx.fillStyle = "#c0392b";
-    for (let i = 0; i < 8; i++) {
-      for (let j = 0; j < 4; j++) {
-        if ((i + j) % 2 === 0) ctx.fillRect(w * 0.2 + i * w * 0.075, h * 0.38 + j * h * 0.04, w * 0.075, h * 0.04);
-      }
+    // First-person claymation picnic view
+    if (imgPicnic.complete && imgPicnic.naturalWidth) {
+      ctx.drawImage(imgPicnic, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = "#2d4a2d";
+      ctx.fillRect(0, 0, w, h);
     }
-    // targets
+    // Darken edges for "hiding behind log" feel
+    const grad = ctx.createLinearGradient(0, h * 0.65, 0, h);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(0.4, "rgba(40,25,10,0.35)");
+    grad.addColorStop(1, "rgba(20,12,5,0.75)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, h * 0.65, w, h * 0.35);
+
+    // Target rings over each picnic person
     spit.targets.forEach(t => {
-      const alpha = t.hit >= 3 ? 0.25 : 1;
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = t.hit > 0 ? "#e67e22" : "#8e5a3a";
-      const tw = t.w * w;
+      if (t.hit >= 3) {
+        // KO marker
+        ctx.globalAlpha = 0.7;
+        ctx.strokeStyle = "#e74c3c";
+        ctx.lineWidth = 3;
+        const r = t.w * w * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(t.x * w - r, t.y * h - r);
+        ctx.lineTo(t.x * w + r, t.y * h + r);
+        ctx.moveTo(t.x * w + r, t.y * h - r);
+        ctx.lineTo(t.x * w - r, t.y * h + r);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        return;
+      }
+      const pulse = 0.6 + 0.4 * Math.sin(Date.now() / 250 + t.x * 10);
+      const r = t.w * w * 0.48;
+      ctx.strokeStyle = t.hit > 0 ? "rgba(240,180,41," + pulse + ")" : "rgba(255,255,255," + (0.45 + pulse * 0.35) + ")";
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(t.x * w, t.y * h, tw * 0.55, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(t.x * w, t.y * h, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // hit pips
       ctx.fillStyle = "#fff";
-      ctx.font = (h * 0.03) + "px sans-serif";
-      ctx.fillText(t.hit + "/3", t.x * w - 12, t.y * h - tw * 0.6);
-      ctx.globalAlpha = 1;
+      ctx.font = "bold " + Math.max(12, h * 0.028) + "px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(t.hit + "/3", t.x * w, t.y * h - r - 6);
     });
-    // timer
+    ctx.textAlign = "left";
+
+    // Flying spitballs
+    if (spit.balls) {
+      spit.balls.forEach(b => {
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.beginPath();
+        ctx.arc(b.x * w, b.y * h, Math.max(4, w * 0.012), 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // HUD strip
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(0, 0, w, h * 0.1);
     ctx.fillStyle = "#fff";
-    ctx.font = "bold " + (h * 0.04) + "px sans-serif";
-    ctx.fillText(Math.ceil(spit.time) + "s", w * 0.05, h * 0.08);
+    ctx.font = "bold " + Math.max(14, h * 0.04) + "px sans-serif";
+    ctx.fillText(Math.ceil(spit.time) + "s", w * 0.04, h * 0.065);
+    ctx.fillText("Ammo " + spit.ammo, w * 0.22, h * 0.065);
+    ctx.fillText("Hits " + spit.score, w * 0.48, h * 0.065);
+    ctx.fillStyle = "#f0b429";
+    ctx.font = Math.max(11, h * 0.028) + "px sans-serif";
+    ctx.fillText("Tap a target · hide behind the log", w * 0.04, h * 0.95);
   }
 
   function endSpitball(finished) {
@@ -2259,6 +2504,13 @@
         drive.hits++;
         change("morale", -4);
         change("gas", -2);
+        const you = state.family.find(f => f.isPlayer);
+        damageMember(you, 6 + (state.difficulty === "hard" ? 4 : 0));
+        // chance non-player gets shaken up
+        if (Math.random() > 0.7) {
+          const o = randomNonPlayer();
+          if (o) damageMember(o, 8);
+        }
         toast("Hit! (" + drive.hits + "/" + drive.maxHits + ")");
         drive.speed *= 0.5;
         if (drive.hits >= drive.maxHits) {
@@ -2329,52 +2581,107 @@
   function drawDrive(canvas) {
     const ctx = canvas.getContext("2d");
     const w = canvas.width, h = canvas.height;
-    ctx.fillStyle = "#3d5c3d";
-    ctx.fillRect(0, 0, w, h);
-    // road
-    const roadW = w * 0.55;
-    const roadX = (w - roadW) / 2;
-    ctx.fillStyle = "#444";
-    ctx.fillRect(roadX, 0, roadW, h);
-    // lanes
-    ctx.strokeStyle = "#ccc";
-    ctx.setLineDash([h * 0.04, h * 0.05]);
-    ctx.lineWidth = 3;
-    ctx.lineDashOffset = -drive.roadOffset % 80;
-    for (let i = 1; i <= 2; i++) {
-      const x = roadX + (roadW / 3) * i;
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
+    // Claymation dashboard POV
+    if (imgDrive.complete && imgDrive.naturalWidth) {
+      ctx.drawImage(imgDrive, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = "#5a7a9a";
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = "#444";
+      ctx.fillRect(w * 0.2, h * 0.35, w * 0.6, h * 0.4);
     }
-    ctx.setLineDash([]);
-    // obstacles
-    const laneW = roadW / 3;
+
+    // Scroll vignette / speed feel
+    const speedFlash = Math.min(1, drive.speed / 2) * 0.08;
+    ctx.fillStyle = "rgba(255,255,255," + speedFlash + ")";
+    ctx.fillRect(0, 0, w, h);
+
+    const laneCenters = [0.35, 0.50, 0.65];
+    // Obstacles as clay cars approaching
     drive.obstacles.forEach(o => {
-      const x = roadX + o.lane * laneW + laneW * 0.2;
-      const y = o.y * h;
-      ctx.fillStyle = o.type === "cone" ? "#e67e22" : (o.type === "debris" ? "#7f8c8d" : "#2980b9");
-      const oh = o.type === "cone" ? h * 0.06 : h * 0.09;
-      ctx.fillRect(x, y, laneW * 0.55, oh);
+      if (o.hit) return;
+      const cx = laneCenters[o.lane] * w;
+      const scale = 0.25 + o.y * 0.75;
+      const cw = w * 0.12 * scale;
+      const ch = h * 0.08 * scale;
+      const cy = h * (0.32 + o.y * 0.38);
+      // shadow
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + ch * 0.55, cw * 0.55, ch * 0.18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // body
+      const colors = ["#c0392b", "#2980b9", "#27ae60", "#8e44ad", "#d35400"];
+      ctx.fillStyle = colors[o.lane % colors.length];
+      roundRect(ctx, cx - cw/2, cy - ch/2, cw, ch, 6 * scale);
+      ctx.fill();
+      // windshield
+      ctx.fillStyle = "rgba(180,220,255,0.7)";
+      roundRect(ctx, cx - cw * 0.35, cy - ch * 0.35, cw * 0.7, ch * 0.35, 3 * scale);
+      ctx.fill();
+      // wheels
+      ctx.fillStyle = "#222";
+      ctx.beginPath();
+      ctx.arc(cx - cw * 0.28, cy + ch * 0.4, ch * 0.18, 0, Math.PI * 2);
+      ctx.arc(cx + cw * 0.28, cy + ch * 0.4, ch * 0.18, 0, Math.PI * 2);
+      ctx.fill();
     });
-    drive.cops.forEach(c => {
-      const x = roadX + c.lane * laneW + laneW * 0.15;
-      const y = c.y * h;
+
+    // Cops
+    (drive.cops || []).forEach(c => {
+      const cx = laneCenters[c.lane] * w;
+      const scale = 0.3 + c.y * 0.7;
+      const cw = w * 0.13 * scale;
+      const ch = h * 0.09 * scale;
+      const cy = h * (0.32 + c.y * 0.38);
       ctx.fillStyle = "#1a1a2e";
-      ctx.fillRect(x, y, laneW * 0.7, h * 0.09);
+      roundRect(ctx, cx - cw/2, cy - ch/2, cw, ch, 5);
+      ctx.fill();
       ctx.fillStyle = "#3498db";
-      ctx.fillRect(x, y, laneW * 0.7, h * 0.02);
+      ctx.fillRect(cx - cw/2, cy - ch/2, cw, ch * 0.18);
+      // light
+      ctx.fillStyle = Math.sin(Date.now()/100) > 0 ? "#e74c3c" : "#3498db";
+      ctx.beginPath();
+      ctx.arc(cx, cy - ch * 0.55, ch * 0.15, 0, Math.PI * 2);
+      ctx.fill();
     });
-    // player car
-    const px = roadX + drive.lane * laneW + laneW * 0.15;
-    const py = h * 0.78;
-    ctx.fillStyle = "#f0b429";
-    ctx.fillRect(px, py, laneW * 0.7, h * 0.12);
-    ctx.fillStyle = "#2c3e50";
-    ctx.fillRect(px + laneW * 0.1, py + h * 0.02, laneW * 0.5, h * 0.04);
+
+    // Lane indicator arrows over dash
+    const laneX = laneCenters[drive.lane] * w;
+    ctx.fillStyle = "rgba(240,180,41,0.85)";
+    ctx.beginPath();
+    ctx.moveTo(laneX, h * 0.72);
+    ctx.lineTo(laneX - w * 0.03, h * 0.76);
+    ctx.lineTo(laneX + w * 0.03, h * 0.76);
+    ctx.closePath();
+    ctx.fill();
+
+    // Hit flash
+    if (drive.hits > 0 && Date.now() % 200 < 100 && drive.hits >= drive.maxHits - 1) {
+      ctx.fillStyle = "rgba(231,76,60,0.2)";
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // HUD
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, w, h * 0.09);
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold " + Math.max(13, h * 0.035) + "px sans-serif";
+    ctx.fillText(Math.ceil(drive.timeLeft) + "s", w * 0.04, h * 0.06);
+    ctx.fillText("Hits " + drive.hits + "/" + drive.maxHits, w * 0.25, h * 0.06);
+    ctx.fillStyle = drive.speed > 1.4 ? "#e67e22" : "#2ecc71";
+    ctx.fillText(drive.speed > 1.4 ? "SPEEDING" : "Cruise", w * 0.55, h * 0.06);
   }
 
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
 
   // ---------- WIRE UP ----------
   function init() {
@@ -2382,7 +2689,9 @@
     $("#player-role").addEventListener("change", buildFamilySetupUI);
     buildFamilySetupUI();
 
-    $("#btn-start").onclick = () => show("family");
+    $("#btn-start").onclick = () => { startMusic(); show("family"); };
+    const musBtn = $("#btn-music");
+    if (musBtn) musBtn.onclick = () => toggleMusic();
     const skipBtn = $("#btn-family-skip");
     if (skipBtn) skipBtn.onclick = () => {
       // random quick start
