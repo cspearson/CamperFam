@@ -80,6 +80,13 @@
             <option value="6">6</option>
           </select>
         </label>
+        <label>Difficulty:
+          <select id="difficulty">
+            <option value="easy">Easy — you can't lose</option>
+            <option value="medium" selected>Medium — jail, breakdowns, can fail</option>
+            <option value="hard">Hard — tight resources, easy to fail</option>
+          </select>
+        </label>
         <div id="family-members-setup"></div>
         <p class="hint">Same personality options for everyone. Appearance is saved for your character.</p>
       </div>
@@ -104,6 +111,7 @@
         <button id="btn-eat" class="btn">Eat</button>
         <button id="btn-talk-family" class="btn">Talk to Family</button>
         <button id="btn-weapons" class="btn">Check Gear</button>
+        <button id="btn-craft" class="btn">Build / Craft</button>
         <button id="btn-depart" class="btn primary">Look at Map</button>
       </div>
       <div id="hub-log" class="log"></div>
@@ -155,6 +163,14 @@
         <img id="portrait-viewer-img" src="" alt="Portrait">
         <div id="portrait-viewer-name"></div>
         <button id="btn-close-portrait" class="btn secondary">Close</button>
+      </div>
+    </div>
+
+    <div id="game-over" class="overlay hidden">
+      <div class="portrait-viewer-panel">
+        <h2 id="game-over-title" style="color:#e74c3c;margin:0 0 8px;">Trip Over</h2>
+        <p id="game-over-text" style="color:#f5e6c8;margin:0 0 14px;line-height:1.4;"></p>
+        <button id="btn-restart" class="btn primary">Start Over</button>
       </div>
     </div>
 

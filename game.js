@@ -11,6 +11,7 @@
     playerHeight: "average",
     playerWeight: "average",
     familySize: 4,
+    difficulty: "medium", // easy | medium | hard
     playerX: 18, // percent across scene
     playerMoving: false,
     playerTargetX: 18,
@@ -47,7 +48,13 @@
       camperNeedsBatteries: false,
       foundBatteries: false,
       batteriesDelivered: false,
-      causedForestTrouble: false
+      causedForestTrouble: false,
+      forestSceneIntro: false,
+      foundSpring: false,
+      foundMagnet: false,
+      foundCap: false,
+      foundWire: false,
+      camperExploded: false
     },
     statesVisited: 0
   };
@@ -213,12 +220,63 @@
   function advanceDay(reason) {
     state.day++;
     state.dayLabel = dayLabels[Math.min(state.day, dayLabels.length - 1)] || `Day ${state.day}`;
-    const drain = 3 + Math.floor(state.familySize / 2);
+    let drain = 3 + Math.floor(state.familySize / 2);
+    if (state.difficulty === "hard") drain += 2;
+    if (state.difficulty === "easy") drain = Math.max(1, drain - 2);
     change("food", -drain);
     if (state.resources.food < 12) change("morale", -7, "Everyone's getting hungry.");
     if (state.resources.heat > 0) change("heat", -4);
     log(reason || `Day ${state.day}.`);
     updateHub();
+    checkLoseConditions();
+  }
+
+  function checkLoseConditions() {
+    if (state.difficulty === "easy") return;
+    if (state.resources.food <= 0 && state.resources.morale <= 10) {
+      return gameOver("The family gave up. No food, no morale, no trip.");
+    }
+    if (state.resources.morale <= 0) {
+      return gameOver("Everyone refused to go any farther. Trip over.");
+    }
+    if (state.difficulty === "hard" && state.resources.gas <= 0 && state.resources.money < 20) {
+      return gameOver("Stranded with an empty tank and empty wallet.");
+    }
+    if (state.flags.camperExploded) {
+      return gameOver("The camper is toast. Literally. End of the road.");
+    }
+  }
+
+  function gameOver(msg) {
+    const t = $("#game-over-title");
+    const x = $("#game-over-text");
+    if (t) t.textContent = "Trip Over";
+    if (x) x.textContent = msg;
+    $("#game-over").classList.remove("hidden");
+  }
+
+  function getArrested(daysLost, reason) {
+    hideDialogue();
+    clearSprites();
+    say("Arrested", reason || "You're in the back of a patrol car. The family is not happy.", [
+      { label: "Sit it out", fn: () => {
+        for (let i = 0; i < daysLost; i++) advanceDay(i === 0 ? "Lost a day in holding." : "Another day wasted.");
+        change("morale", -15);
+        change("money", -20);
+        change("heat", -Math.min(state.resources.heat, 25));
+        state.flags.policeDone = true;
+        toast("Released. Heat down, morale wrecked.");
+        show("hub");
+        log("Arrested. Lost " + daysLost + " day(s).");
+        if (state.difficulty === "medium" && daysLost >= 3) {
+          // long jail can end medium
+          if (state.resources.morale < 20) gameOver("After a long stint in holding, the trip fell apart.");
+        }
+        if (state.difficulty === "hard" && daysLost >= 2 && state.resources.morale < 25) {
+          gameOver("Jail time broke the trip. Everyone wants to go home.");
+        }
+      }}
+    ]);
   }
 
   function say(speaker, text, choices = []) {
@@ -961,44 +1019,133 @@
 
   function enterForest() {
     state.flags.forestExplored = true;
-    say("Deep in the Pines", "The path narrows. Your flashlight catches something metallic under a root.", [
-      { label: "Pick it up", fn: () => {
+    clearSprites();
+    $("#scene-bg").className = "campground";
+    $("#scene-title").textContent = "Deep Woods";
+    if (!state.flags.shadyDealt) addSprite("char-shady.jpg", "shady");
+    const hs = $("#hotspots");
+    hs.innerHTML = "";
+    const spots = [
+      { label: "Root Hollow", style: "left:10%;bottom:16%;width:22%;height:28%;", important: true, action: forestHollow, x: 16 },
+      { label: "Fallen Log", style: "left:38%;bottom:12%;width:24%;height:24%;", important: true, action: forestLog, x: 44 },
+      { label: "Clearing", style: "left:65%;bottom:18%;width:22%;height:30%;", action: forestClearing, x: 70 },
+      { label: "Strange Noise", style: "left:20%;top:20%;width:24%;height:18%;", action: forestNoise, x: 28 },
+      { label: "Back to Camp", style: "left:42%;bottom:2%;width:20%;height:12%;", action: () => enterCampground(), x: 50 }
+    ];
+    spots.forEach(h => {
+      const el = document.createElement("div");
+      el.className = "hotspot" + (h.important ? " important" : "");
+      el.style.cssText = h.style;
+      el.textContent = h.label;
+      el.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (state.playerMoving) return;
+        if (Math.abs(state.playerX - h.x) < 16) h.action();
+        else walkThen(h.action, h.x);
+      };
+      hs.appendChild(el);
+    });
+    show("scene");
+    state.playerX = 50;
+    ensureWalkLayer();
+    ensurePlayerSprite();
+    if (!state.flags.forestSceneIntro) {
+      state.flags.forestSceneIntro = true;
+      setTimeout(() => say("Deep Woods", "The trail disappears under needles. Your light only reaches so far.", [
+        { label: "Look around", fn: () => toast("Tap spots to search. Yellow ones matter.") }
+      ]), 300);
+    }
+  }
+
+  function forestHollow() {
+    say("Root Hollow", "Metal glints under a thick root.", [
+      { label: "Dig it out", fn: () => {
         if (!state.flags.foundLocket) {
           state.flags.foundLocket = true;
-          state.inventory.push({ id: "locket", name: "Tarnished Locket", desc: "Old photo inside. Someone might want this back.", qty: 1 });
-          change("morale", 3, "You pocket a tarnished locket.");
-          toast("Item found: Tarnished Locket");
+          addOrStack({ id: "locket", name: "Tarnished Locket", desc: "Old photo inside. Someone might want this back.", qty: 1 });
+          change("morale", 3);
+          toast("Found: Tarnished Locket");
+        } else if (!state.flags.foundSpring) {
+          state.flags.foundSpring = true;
+          addOrStack({ id: "spring", name: "Rusty Spring", desc: "Boing", qty: 1 });
+          toast("Found: Rusty Spring");
         } else {
-          toast("You've already searched here.");
+          toast("Nothing else here.");
         }
-        say("Forest", "Farther in, a fallen log hides a small plastic pack.", [
-          { label: "Check the pack", fn: () => {
-            if (!state.flags.foundBatteries) {
-              state.flags.foundBatteries = true;
-              state.inventory.push({ id: "batteries", name: "AA Batteries", desc: "Still good. Useful for someone.", qty: 1 });
-              toast("Item found: AA Batteries");
-            }
-            say("Forest", "That's enough exploring for now.", [
-              { label: "Head back", fn: () => {} }
-            ]);
-          }},
-          { label: "Leave it", fn: () => {} }
-        ]);
       }},
-      { label: "Keep walking deeper", fn: () => {
-        say("Forest", "You push farther than you should. A figure shifts between trees — then it's gone.", [
-          { label: "Get out of here", fn: () => {
-            change("morale", -5, "Your heart is still racing.");
-            if (!state.flags.shadyDealt) change("heat", 2);
-          }},
-          { label: "Chase it", fn: () => {
-            change("morale", -8);
-            change("heat", 4, "You trip, scramble up, and run back to camp.");
-            state.flags.causedForestTrouble = true;
-          }}
-        ]);
+      { label: "Leave it", fn: () => {} }
+    ]);
+  }
+
+  function forestLog() {
+    say("Fallen Log", "A plastic pack is wedged under the log.", [
+      { label: "Pull it free", fn: () => {
+        if (!state.flags.foundBatteries) {
+          state.flags.foundBatteries = true;
+          addOrStack({ id: "batteries", name: "AA Batteries", desc: "Still good. Useful for someone.", qty: 1 });
+          toast("Found: AA Batteries");
+        } else if (!state.flags.foundMagnet) {
+          state.flags.foundMagnet = true;
+          addOrStack({ id: "magnet", name: "Fridge Magnet", desc: "Weak but earnest", qty: 1 });
+          toast("Found: Fridge Magnet");
+        } else {
+          toast("Already cleaned out.");
+        }
       }},
-      { label: "Turn back", fn: () => {} }
+      { label: "Kick the log (trouble)", fn: () => {
+        change("heat", 3);
+        change("morale", -2, "Something skitters away. Loud.");
+        state.flags.causedForestTrouble = true;
+      }},
+      { label: "Leave it", fn: () => {} }
+    ]);
+  }
+
+  function forestClearing() {
+    say("Clearing", "An old fire ring. Cold. Someone camped here recently.", [
+      { label: "Search the ashes", fn: () => {
+        if (!state.flags.foundCap) {
+          state.flags.foundCap = true;
+          addOrStack({ id: "bottle_cap", name: "Bottle Cap", desc: "Lucky? Probably not.", qty: 1 });
+          toast("Found: Bottle Cap");
+        } else toast("Just ash.");
+      }},
+      { label: "Sit and listen", fn: () => change("morale", 2, "Quiet. Almost peaceful.") },
+      { label: "Cause trouble", fn: () => {
+        change("heat", 4);
+        state.flags.causedForestTrouble = true;
+        toast("You knock over the ring. Pointless, but loud.");
+      }}
+    ]);
+  }
+
+  function forestNoise() {
+    say("Strange Noise", "Twigs snap. Closer than you like.", [
+      { label: "Call out", fn: () => {
+        if (!state.flags.shadyDealt) {
+          say("???", "…keep walking, tourist.", [
+            { label: "Back off", fn: () => change("morale", -3) },
+            { label: "Chase them", fn: () => {
+              change("morale", -6);
+              change("heat", 5);
+              state.flags.causedForestTrouble = true;
+              toast("You lose them in the dark.");
+            }}
+          ]);
+        } else {
+          change("morale", 1, "Just a deer. Or you tell yourself that.");
+        }
+      }},
+      { label: "Hide and watch", fn: () => {
+        change("morale", -2);
+        if (!state.flags.foundWire) {
+          state.flags.foundWire = true;
+          addOrStack({ id: "wire", name: "Scrap Wire", desc: "Conducts bad ideas", qty: 1 });
+          toast("Found scrap wire near a stump while hiding.");
+        }
+      }},
+      { label: "Get out", fn: () => {} }
     ]);
   }
 
@@ -1033,9 +1180,11 @@
         say("Near the Gate", "A ranger truck is parked with the lights off. Someone is writing in a notebook.", [
           { label: "Say hello", fn: () => {
             say("Ranger", "Keep your sites locked. We've had theft reports two nights running.", [
-              { label: "We will", fn: () => { state.flags.campWarned = true; change("morale", 2); } }
+              { label: "We will", fn: () => { state.flags.campWarned = true; change("morale", 2); } },
+              { label: "Cause trouble", fn: () => rangerTrouble() }
             ]);
           }},
+          { label: "Cause trouble with the ranger", fn: () => rangerTrouble() },
           { label: "Avoid them", fn: () => {
             if (state.resources.heat > 10) change("heat", 2, "You feel like they noticed you.");
             else toast("You loop back quietly.");
@@ -1043,6 +1192,39 @@
         ]);
       }},
       { label: "Stay near your site", fn: () => {} }
+    ]);
+  }
+
+  function rangerTrouble() {
+    say("Ranger", "Excuse me?", [
+      { label: "Mouth off", fn: () => {
+        change("heat", 10);
+        say("Ranger", "That's enough. Hands where I can see them.", [
+          { label: "Talk your way out", fn: () => {
+            const bonus = personalities[state.playerPersonality]?.talkBonus || 0;
+            if (state.difficulty === "easy" || (state.resources.morale + bonus > 60 && Math.random() > 0.4)) {
+              change("heat", 5);
+              change("morale", -4, "You talk fast. They let you walk with a warning.");
+            } else {
+              getArrested(1, "You talked too much. Overnight in the county holding cell.");
+            }
+          }},
+          { label: "Try to run", fn: () => {
+            if (state.difficulty === "easy" || Math.random() > 0.55) {
+              change("heat", 12);
+              change("morale", -6, "You make it back to the camper. Barely.");
+            } else {
+              getArrested(1, "You didn't make it far. One day in holding.");
+            }
+          }},
+          { label: "Submit", fn: () => getArrested(1, "You go quietly. One day gone.") }
+        ]);
+      }},
+      { label: "Throw spitballs / bubbles", fn: () => {
+        change("heat", 20);
+        getArrested(state.difficulty === "hard" ? 2 : 1, "Assaulting a ranger with toys. Bold. Stupid. Arrested.");
+      }},
+      { label: "Back down", fn: () => change("morale", -1) }
     ]);
   }
 
@@ -1119,16 +1301,95 @@
   }
 
   function examineGifts() {
-    say("Gift Shelf", "Keychains, snow globes, and a rubber chicken in sunglasses.", [
-      { label: "Buy the chicken ($7)", fn: () => {
-        if (state.resources.money >= 7) {
-          change("money", -7);
-          state.inventory.push({ id: "chicken", name: "Rubber Chicken", desc: "No practical use", qty: 1 });
-          change("morale", 4, "Someone in the family already loves it.");
-        }
+    say("Gift Shelf", "Keychains, snow globes, duct tape, wire, a rubber chicken in sunglasses, and a bag of random junk.", [
+      { label: "Buy rubber chicken ($7)", fn: () => buyJunk("chicken", "Rubber Chicken", "Squeaks. Maybe useful?", 7, 4) },
+      { label: "Buy duct tape ($4)", fn: () => buyJunk("duct_tape", "Duct Tape", "Holds the universe together", 4, 1) },
+      { label: "Buy scrap wire ($3)", fn: () => buyJunk("wire", "Scrap Wire", "Conducts bad ideas", 3, 0) },
+      { label: "Buy keychain ($2)", fn: () => buyJunk("keychain", "State Keychain", "Tiny souvenir", 2, 2) },
+      { label: "Buy snow globe ($5)", fn: () => buyJunk("snowglobe", "Snow Globe", "Shakes. Doesn't help driving.", 5, 3) },
+      { label: "Buy mystery junk bag ($6)", fn: () => {
+        if (state.resources.money < 6) { toast("Not enough money."); return; }
+        change("money", -6);
+        const pool = [
+          { id: "bottle_cap", name: "Bottle Cap", desc: "Lucky? Probably not.", qty: 1 },
+          { id: "spring", name: "Rusty Spring", desc: "Boing", qty: 1 },
+          { id: "magnet", name: "Fridge Magnet", desc: "Weak but earnest", qty: 1 },
+          { id: "duct_tape", name: "Duct Tape", desc: "Holds the universe together", qty: 1 }
+        ];
+        const item = pool[Math.floor(Math.random() * pool.length)];
+        addOrStack(item);
+        change("morale", 2, "Got: " + item.name);
       }},
       { label: "Leave it", fn: () => {} }
     ]);
+  }
+
+  function buyJunk(id, name, desc, cost, moraleGain) {
+    if (state.resources.money < cost) { toast("Not enough money."); return; }
+    change("money", -cost);
+    addOrStack({ id, name, desc, qty: 1 });
+    if (moraleGain) change("morale", moraleGain, "Bought: " + name);
+    else toast("Bought: " + name);
+  }
+
+  function addOrStack(item) {
+    const existing = state.inventory.find(i => i.id === item.id);
+    if (existing) existing.qty += (item.qty || 1);
+    else state.inventory.push({ ...item });
+  }
+
+  function openCraft() {
+    const recipes = [
+      {
+        name: "Slapdash Antenna",
+        need: ["wire", "duct_tape"],
+        result: { id: "antenna", name: "Slapdash Antenna", desc: "Picks up weird radio stations", qty: 1 },
+        effect: () => change("morale", 5, "Built a slapdash antenna.")
+      },
+      {
+        name: "Gum Trap",
+        need: ["gum", "spring"],
+        result: { id: "gum_trap", name: "Gum Trap", desc: "Sticky surprise for prowlers", qty: 1 },
+        effect: () => change("morale", 3, "Crafted a gum trap.")
+      },
+      {
+        name: "Chicken Decoy",
+        need: ["chicken", "keychain"],
+        result: { id: "chicken_decoy", name: "Chicken Decoy", desc: "Distracts people. Somehow.", qty: 1 },
+        effect: () => change("morale", 6, "The decoy is ridiculous. Perfect.")
+      },
+      {
+        name: "Magnet Grabber",
+        need: ["magnet", "wire"],
+        result: { id: "grabber", name: "Magnet Grabber", desc: "Pulls metal out of storm drains", qty: 1 },
+        effect: () => change("morale", 4, "Built a magnet grabber.")
+      },
+      {
+        name: "Emergency Patch Kit",
+        need: ["duct_tape", "bottle_cap"],
+        result: { id: "patch_kit", name: "Emergency Patch Kit", desc: "Might save the camper once", qty: 1 },
+        effect: () => change("morale", 2, "Patch kit ready.")
+      }
+    ];
+    const choices = recipes.map(r => ({
+      label: r.name + " [" + r.need.join(" + ") + "]",
+      fn: () => tryCraft(r)
+    }));
+    choices.push({ label: "Never mind", fn: () => {} });
+    say("Workbench", "Dump the junk on the table. What are you trying to build?", choices);
+  }
+
+  function tryCraft(recipe) {
+    for (const id of recipe.need) {
+      if (!hasItem(id)) {
+        toast("Missing: " + id.replace(/_/g, " "));
+        return;
+      }
+    }
+    recipe.need.forEach(id => useItem(id));
+    addOrStack(recipe.result);
+    recipe.effect();
+    toast("Built: " + recipe.result.name);
   }
 
   function examineJukebox() {
@@ -1306,22 +1567,54 @@
     $("#btn-family-done").onclick = () => {
       try {
         buildFamily();
-        if (state.familySize >= 5) {
+        const diffEl = $("#difficulty");
+        state.difficulty = diffEl ? diffEl.value : "medium";
+        if (state.difficulty === "easy") {
+          state.resources.food = 80;
+          state.resources.money = 150;
+          state.resources.gas = 100;
+          state.resources.morale = 85;
+        } else if (state.difficulty === "hard") {
+          state.resources.food = 40;
+          state.resources.money = 70;
+          state.resources.gas = 55;
+          state.resources.morale = 55;
+        } else if (state.familySize >= 5) {
           state.resources.food = 48;
           state.resources.money = 95;
         }
         show("hub");
-        log("Everyone's in. Day 1.");
+        log("Everyone's in. Day 1. (" + state.difficulty + ")");
       } catch (err) {
         console.error(err);
         alert("Something went wrong starting the trip. Try again.");
       }
     };
 
+    const craftBtn = $("#btn-craft");
+    if (craftBtn) craftBtn.onclick = openCraft;
+
+    const restart = $("#btn-restart");
+    if (restart) restart.onclick = () => location.reload();
+
     $("#btn-rest").onclick = () => {
       change("morale", 12);
       change("food", -3);
       log("Rested.");
+      // Camper trouble on medium/hard
+      if (state.difficulty !== "easy" && state.resources.heat >= 30 && Math.random() > 0.75) {
+        if (hasItem("patch_kit")) {
+          useItem("patch_kit");
+          toast("Something sparked near the engine. Patch kit saved you.");
+        } else if (state.difficulty === "hard" && Math.random() > 0.5) {
+          state.flags.camperExploded = true;
+          checkLoseConditions();
+          return;
+        } else {
+          change("gas", -15);
+          change("morale", -10, "Engine trouble overnight. Lost gas.");
+        }
+      }
       if (Math.random() > 0.65) advanceDay("Night passes.");
     };
 
