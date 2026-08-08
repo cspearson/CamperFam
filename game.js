@@ -33,6 +33,11 @@
       visitedRest: false,
       visitedCamp: false,
       visitedDiner: false,
+      campIntro: false,
+      campLockFixed: false,
+      campWarned: false,
+      shadyDealt: false,
+      shadyMad: false,
       waitressTalks: 0,
       familyTension: 0
     },
@@ -358,8 +363,14 @@
 
   function walkThen(actionFn, hotspotLeftPct) {
     // walk near the hotspot then run the action
-    const target = Math.max(10, Math.min(85, hotspotLeftPct + 6));
-    movePlayerTo(target, actionFn);
+    const target = Math.max(10, Math.min(85, (hotspotLeftPct || 40) + 6));
+    try {
+      movePlayerTo(target, actionFn);
+    } catch (err) {
+      console.warn("walk failed, running action directly", err);
+      state.playerMoving = false;
+      if (actionFn) actionFn();
+    }
   }
 
 
@@ -386,9 +397,15 @@
       el.style.cssText = h.style;
       el.textContent = h.label;
       el.onclick = (e) => {
+        e.preventDefault();
         e.stopPropagation();
         if (state.playerMoving) return;
-        walkThen(h.action, h.x);
+        // if already close, interact immediately
+        if (Math.abs(state.playerX - h.x) < 14) {
+          h.action();
+        } else {
+          walkThen(h.action, h.x);
+        }
       };
       hs.appendChild(el);
     });
@@ -671,39 +688,183 @@
     clearSprites();
     $("#scene-bg").className = "campground";
     $("#scene-title").textContent = "Shady Pines Campground";
-    $("#hotspots").innerHTML = "";
+    const hs = $("#hotspots");
+    hs.innerHTML = "";
+    const spots = [
+      { label: "Your Camper", style: "left:55%;bottom:12%;width:28%;height:36%;", important: true, action: campCamper, x: 62 },
+      { label: "Campfire", style: "left:22%;bottom:18%;width:22%;height:24%;", action: campFire, x: 28 },
+      { label: "Shady Guy", style: "left:8%;bottom:14%;width:18%;height:34%;", important: true, action: campShady, x: 14 },
+      { label: "Trees", style: "left:78%;bottom:20%;width:18%;height:40%;", action: campTrees, x: 80 },
+      { label: "Path", style: "left:40%;bottom:4%;width:20%;height:14%;", action: campPath, x: 45 }
+    ];
+    spots.forEach(h => {
+      const el = document.createElement("div");
+      el.className = "hotspot" + (h.important ? " important" : "");
+      el.style.cssText = h.style;
+      el.textContent = h.label;
+      el.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (state.playerMoving) return;
+        if (Math.abs(state.playerX - h.x) < 14) h.action();
+        else walkThen(h.action, h.x);
+      };
+      hs.appendChild(el);
+    });
     show("scene");
-    say("Shady Pines", "It's getting dark. Your camper is under the trees. Something scrapes near the back storage door.", [
-      { label: "Go check", fn: () => {
-        say("Behind the Camper", "Someone's trying the latch on the storage compartment.", [
-          { label: "Yell at them", fn: () => {
-            change("morale", 4, "They take off running.");
-            log("Ran off a prowler at the campground.");
-            show("hub");
+    state.playerX = 50;
+    ensureWalkLayer();
+    ensurePlayerSprite();
+    if (!state.flags.campIntro) {
+      state.flags.campIntro = true;
+      setTimeout(() => say("You", "The campground is quieter than it should be. One of the other campers is watching your site a little too carefully.", [
+        { label: "Look around", fn: () => toast("Tap the glowing spots. Yellow ones matter more.") }
+      ]), 350);
+    }
+  }
+
+  function campCamper() {
+    say("Your Camper", "The storage latch looks scratched. Someone has been testing it.", [
+      { label: "Check the lock", fn: () => {
+        if (state.flags.campLockFixed) {
+          say("You", "Still solid. Good.");
+        } else {
+          say("You", "It's loose. You tighten it with a coin.", [
+            { label: "Done", fn: () => {
+              state.flags.campLockFixed = true;
+              change("morale", 3, "A little safer now.");
+            }}
+          ]);
+        }
+      }},
+      { label: "Sit inside and wait", fn: () => {
+        change("morale", -2);
+        toast("Long quiet minutes pass.");
+      }},
+      { label: "Leave the site for now", fn: () => {} }
+    ]);
+  }
+
+  function campFire() {
+    say("Campfire", "A low fire is going at the next site over. Two people are talking in low voices.", [
+      { label: "Join them politely", fn: () => {
+        say("Camper", "Evening. You with the painted van? Saw a guy circling your lot earlier. Hood up. Didn't look friendly.", [
+          { label: "Thanks for telling us", fn: () => {
+            change("morale", 4);
+            state.flags.campWarned = true;
           }},
-          { label: "Hit them with bubbles", fn: () => {
-            if (hasItem("bubbles")) {
-              useItem("bubbles");
-              change("morale", 7, "Big bubbles. They panic and run.");
-              log("Bubbles handled the situation.");
-            } else {
-              change("food", -5, "No bubbles left. They got into the snacks.");
-            }
-            show("hub");
-          }},
-          { label: "Stay quiet and watch", fn: () => {
-            change("food", -9);
-            change("morale", -10, "They took food and left. Everyone's on edge.");
-            log("Lost supplies overnight.");
-            show("hub");
+          { label: "Ask who it was", fn: () => {
+            say("Camper", "Didn't get a name. Thin, kept his hands in his pockets. Hangs near the trees after dark.", [
+              { label: "Got it", fn: () => { state.flags.campWarned = true; change("morale", 2); } }
+            ]);
           }}
         ]);
       }},
-      { label: "Lock everything and stay inside", fn: () => {
-        change("morale", -2);
-        log("Stayed locked in. Quiet night.");
-        show("hub");
-      }}
+      { label: "Listen from a distance", fn: () => {
+        say("You", "You catch bits of talk about missing coolers and a ranger who stopped by last night.", [
+          { label: "Interesting", fn: () => change("morale", 1) }
+        ]);
+      }},
+      { label: "Walk away", fn: () => {} }
+    ]);
+  }
+
+  function campShady() {
+    if (state.flags.shadyDealt) {
+      say("Shady Guy", "What? I'm just walking. Leave me alone.", [
+        { label: "Back off", fn: () => {} }
+      ]);
+      return;
+    }
+    say("Shady Guy", "Nice camper. You folks travel light? Storage look full from here.", [
+      { label: "Keep walking. Not interested.", fn: () => {
+        change("morale", 2);
+        toast("He watches you leave.");
+      }},
+      { label: "Why are you hanging around our site?", fn: () => {
+        say("Shady Guy", "Public ground. I can stand where I want.", [
+          { label: "Ask him to move along", fn: () => {
+            const bonus = personalities[state.playerPersonality]?.talkBonus || 0;
+            if (state.resources.morale + bonus > 55) {
+              state.flags.shadyDealt = true;
+              change("morale", 5, "He shrugs and drifts off.");
+            } else {
+              change("heat", 3);
+              change("morale", -3, "He smirks and stays put.");
+            }
+          }},
+          { label: "Threaten him with bubbles / spitballs", fn: () => chooseCampWeapon() },
+          { label: "Drop it", fn: () => {} }
+        ]);
+      }},
+      { label: "Offer him a snack to go away", fn: () => {
+        if (state.resources.food < 4) { toast("Not enough food."); return; }
+        change("food", -4);
+        state.flags.shadyDealt = true;
+        change("morale", 3, "He takes it and leaves. For now.");
+      }},
+      { label: "Pull out gear", fn: () => chooseCampWeapon() }
+    ]);
+  }
+
+  function chooseCampWeapon() {
+    say("You", "What do you reach for?", [
+      { label: "Bubble Blaster", fn: () => {
+        if (!hasItem("bubbles")) { toast("Out of bubbles."); return; }
+        useItem("bubbles");
+        state.flags.shadyDealt = true;
+        change("morale", 6, "Giant bubbles. He swears and leaves.");
+        change("heat", 2);
+      }},
+      { label: "Spitball Shooter", fn: () => {
+        if (!hasItem("spitballs")) { toast("Out of spitballs."); return; }
+        useItem("spitballs", 2);
+        change("heat", 5);
+        change("morale", -2, "He wipes his face. Now he's angry.");
+        state.flags.shadyMad = true;
+      }},
+      { label: "Foam Nunchucks", fn: () => {
+        state.flags.shadyDealt = true;
+        change("morale", 4, "He laughs, then leaves anyway.");
+      }},
+      { label: "Never mind", fn: () => {} }
+    ]);
+  }
+
+  function campTrees() {
+    say("Trees", "The pines are thick. Something moved between the trunks a second ago.", [
+      { label: "Call out", fn: () => {
+        say("You", "Nobody answers. A branch snaps farther in.", [
+          { label: "Go back to the fire", fn: () => {} },
+          { label: "Wait and watch", fn: () => {
+            if (state.flags.shadyDealt) {
+              change("morale", 2, "Nothing else moves. You head back.");
+            } else {
+              change("morale", -4, "You feel watched the whole way back.");
+            }
+          }}
+        ]);
+      }},
+      { label: "Don't go in", fn: () => change("morale", 1, "Smart.") }
+    ]);
+  }
+
+  function campPath() {
+    say("Camp Path", "The dirt path leads toward the restrooms and the front gate.", [
+      { label: "Walk toward the gate", fn: () => {
+        say("Near the Gate", "A ranger truck is parked with the lights off. Someone is writing in a notebook.", [
+          { label: "Say hello", fn: () => {
+            say("Ranger", "Keep your sites locked. We've had theft reports two nights running.", [
+              { label: "We will", fn: () => { state.flags.campWarned = true; change("morale", 2); } }
+            ]);
+          }},
+          { label: "Avoid them", fn: () => {
+            if (state.resources.heat > 10) change("heat", 2, "You feel like they noticed you.");
+            else toast("You loop back quietly.");
+          }}
+        ]);
+      }},
+      { label: "Stay near your site", fn: () => {} }
     ]);
   }
 
