@@ -1,40 +1,48 @@
-// Camper Quest – Point & Click
-// Dialogue-driven consequences • Multiple silly weapons • Day progression
+// Camper Quest – natural dialogue, personalities, more arguments
 
 (() => {
   const state = {
     day: 1,
     dayLabel: "Leaving Home",
     playerRole: "Older Sister",
+    playerPersonality: "sarcastic",
     familySize: 4,
     family: [],
     resources: { gas: 80, food: 55, money: 110, morale: 70, heat: 0 },
     inventory: [
-      { id: "bubbles", name: "Bubble Blaster", desc: "Giant floating bubbles", qty: 5 },
-      { id: "spitballs", name: "Spitball Shooter", desc: "Classic schoolyard ammo", qty: 8 },
-      { id: "nunchucks", name: "Foam Nunchucks", desc: "Look cooler than they are", qty: 1 },
-      { id: "gum", name: "Sticky Bubble Gum", desc: "Perfect for hair emergencies", qty: 4 },
+      { id: "bubbles", name: "Bubble Blaster", desc: "Shoots big floating bubbles", qty: 5 },
+      { id: "spitballs", name: "Spitball Shooter", desc: "Old-school and annoying", qty: 8 },
+      { id: "nunchucks", name: "Foam Nunchucks", desc: "Look cooler than they hit", qty: 1 },
+      { id: "gum", name: "Sticky Bubble Gum", desc: "Ends up in hair more than mouths", qty: 4 },
       { id: "snacks", name: "Road Snacks", qty: 3 }
     ],
     flags: {
       coolerTaken: false,
-      talkedRusty: false,
-      rivalMad: false,
-      rivalTruce: false,
-      gumInHair: false,
+      talkedRusty: 0,
+      rivalState: "neutral", // neutral | annoyed | mad | truce
+      gumPrank: false,
       policeDone: false,
       visitedRest: false,
       visitedCamp: false,
       visitedDiner: false,
-      familyMood: "normal" // normal | happy | grumpy | chaotic
+      waitressTalks: 0,
+      familyTension: 0
     },
     statesVisited: 0
   };
 
-  const dayLabels = [
-    "", "Leaving Home", "First Stretch", "Getting Settled", "Road Weary",
-    "Halfway Vibes", "Deep into the Trip", "Almost Legendary", "Final Push"
-  ];
+  const personalities = {
+    sarcastic: { label: "Sarcastic", talkBonus: 0 },
+    peacemaker: { label: "Peacemaker", talkBonus: 15 },
+    troublemaker: { label: "Troublemaker", talkBonus: -10 },
+    anxious: { label: "Anxious", talkBonus: 5 },
+    optimistic: { label: "Optimistic", talkBonus: 10 },
+    grumpy: { label: "Grumpy", talkBonus: -5 },
+    quiet: { label: "Quiet", talkBonus: 0 },
+    loud: { label: "Loud", talkBonus: -5 }
+  };
+
+  const dayLabels = ["", "Leaving Home", "First Stretch", "Getting Settled", "Road Weary", "Deep into the Trip", "Still Going", "Long Haul"];
 
   const $ = s => document.querySelector(s);
   const $$ = s => document.querySelectorAll(s);
@@ -47,11 +55,52 @@
     if (id === "map") $("#map-day").textContent = state.day;
   }
 
+  function buildFamilySetupUI() {
+    const size = parseInt($("#family-size").value, 10);
+    const container = $("#family-members-setup");
+    container.innerHTML = "";
+    const roles = ["Dad", "Mom", "Younger Brother", "Little Sister", "Cousin", "Uncle"];
+    for (let i = 1; i < size; i++) {
+      const div = document.createElement("div");
+      div.style.marginTop = "10px";
+      div.innerHTML = `
+        <label style="font-size:0.9rem">${roles[i-1] || "Family Member"} personality:
+          <select class="member-personality" data-idx="${i}">
+            <option value="grumpy">Grumpy</option>
+            <option value="optimistic">Optimistic</option>
+            <option value="quiet">Quiet</option>
+            <option value="loud">Loud</option>
+            <option value="troublemaker">Troublemaker</option>
+            <option value="peacemaker">Peacemaker</option>
+          </select>
+        </label>`;
+      container.appendChild(div);
+    }
+  }
+
   function buildFamily() {
-    const others = ["Dad", "Mom", "Younger Brother", "Little Sister", "Cousin", "Baby"];
-    state.family = [{ name: "You", role: state.playerRole, isPlayer: true }];
-    for (let i = 1; i < state.familySize; i++) {
-      state.family.push({ name: others[i-1] || "Family", role: others[i-1], isPlayer: false });
+    state.playerRole = $("#player-role").value;
+    state.playerPersonality = $("#player-personality").value;
+    state.familySize = parseInt($("#family-size").value, 10);
+    const roles = ["Dad", "Mom", "Younger Brother", "Little Sister", "Cousin", "Uncle"];
+    state.family = [{
+      name: "You",
+      role: state.playerRole,
+      personality: state.playerPersonality,
+      isPlayer: true
+    }];
+    const selects = $$(".member-personality");
+    selects.forEach((sel, i) => {
+      state.family.push({
+        name: roles[i] || "Family",
+        role: roles[i] || "Family",
+        personality: sel.value,
+        isPlayer: false
+      });
+    });
+    // fill remaining if needed
+    while (state.family.length < state.familySize) {
+      state.family.push({ name: "Family", role: "Family", personality: "quiet", isPlayer: false });
     }
   }
 
@@ -63,7 +112,8 @@
     $("#res-money").textContent = state.resources.money;
     $("#res-morale").textContent = state.resources.morale;
     $("#res-heat").textContent = state.resources.heat;
-    $("#family-line").textContent = "Family: " + state.family.map(f => f.isPlayer ? `You (${f.role})` : f.name).join(", ");
+    const names = state.family.map(f => f.isPlayer ? `You (${f.role})` : `${f.name} (${personalities[f.personality]?.label || f.personality})`);
+    $("#family-line").textContent = names.join(" · ");
   }
 
   function log(msg) {
@@ -71,7 +121,7 @@
     el.innerHTML = `<div>• ${msg}</div>` + el.innerHTML;
   }
 
-  function toast(msg, ms = 2600) {
+  function toast(msg, ms = 2500) {
     const t = $("#toast");
     t.textContent = msg;
     t.classList.remove("hidden");
@@ -79,96 +129,83 @@
     t._t = setTimeout(() => t.classList.add("hidden"), ms);
   }
 
-  function changeResource(key, amount, reason) {
-    state.resources[key] = Math.max(0, Math.min(key === "morale" || key === "heat" ? 100 : 999, state.resources[key] + amount));
-    if (reason) toast(reason);
+  function change(key, amount, msg) {
+    const max = (key === "morale" || key === "heat") ? 100 : 999;
+    state.resources[key] = Math.max(0, Math.min(max, state.resources[key] + amount));
+    if (msg) toast(msg);
     updateHub();
   }
 
   function advanceDay(reason) {
     state.day++;
     state.dayLabel = dayLabels[Math.min(state.day, dayLabels.length - 1)] || `Day ${state.day}`;
-    // Daily drain
-    const foodDrain = 3 + Math.floor(state.familySize / 2);
-    changeResource("food", -foodDrain);
-    if (state.resources.food < 10) changeResource("morale", -8, "Running low on food… family is grumpy.");
-    if (state.resources.heat > 0) changeResource("heat", -3); // heat cools a bit each day
-    log(reason || `Day ${state.day} begins.`);
+    const drain = 3 + Math.floor(state.familySize / 2);
+    change("food", -drain);
+    if (state.resources.food < 12) change("morale", -7, "Everyone's getting hungry.");
+    if (state.resources.heat > 0) change("heat", -4);
+    log(reason || `Day ${state.day}.`);
     updateHub();
   }
 
-  // ---------- Dialogue ----------
   function say(speaker, text, choices = []) {
     $("#dlg-speaker").textContent = speaker;
     $("#dlg-text").textContent = text;
     const box = $("#dlg-choices");
     box.innerHTML = "";
-    if (choices.length === 0) {
+    if (!choices.length) {
       const b = document.createElement("button");
       b.textContent = "…";
-      b.onclick = () => hideDialogue();
+      b.onclick = hideDialogue;
       box.appendChild(b);
     } else {
       choices.forEach(c => {
         const b = document.createElement("button");
         b.textContent = c.label;
-        b.onclick = () => {
-          hideDialogue();
-          if (c.fn) c.fn();
-        };
+        b.onclick = () => { hideDialogue(); if (c.fn) c.fn(); };
         box.appendChild(b);
       });
     }
     $("#dialogue").classList.remove("hidden");
   }
 
-  function hideDialogue() {
-    $("#dialogue").classList.add("hidden");
-  }
+  function hideDialogue() { $("#dialogue").classList.add("hidden"); }
 
-  // ---------- Inventory ----------
   function openInv() {
     const list = $("#inv-list");
     list.innerHTML = "";
     state.inventory.forEach(item => {
       const d = document.createElement("div");
       d.className = "inv-item";
-      d.innerHTML = `<span><b>${item.name}</b>${item.desc ? `<br><small style="opacity:0.7">${item.desc}</small>` : ""}</span><span>×${item.qty}</span>`;
+      d.innerHTML = `<span><b>${item.name}</b>${item.desc ? `<br><small style="opacity:.7">${item.desc}</small>` : ""}</span><span>×${item.qty}</span>`;
       list.appendChild(d);
     });
     $("#inventory").classList.remove("hidden");
   }
 
-  function closeInv() {
-    $("#inventory").classList.add("hidden");
-  }
+  function closeInv() { $("#inventory").classList.add("hidden"); }
 
   function hasItem(id) {
     const it = state.inventory.find(i => i.id === id);
     return it && it.qty > 0;
   }
-
-  function useItem(id, amount = 1) {
+  function useItem(id, n = 1) {
     const it = state.inventory.find(i => i.id === id);
-    if (it) it.qty = Math.max(0, it.qty - amount);
+    if (it) it.qty = Math.max(0, it.qty - n);
   }
 
-  // ---------- Rest Stop Scene ----------
+  // ---------- REST STOP ----------
   function enterReststop() {
     $("#scene-bg").className = "reststop";
     $("#scene-title").textContent = "Rusty's Roadside Rest Stop";
     const hs = $("#hotspots");
     hs.innerHTML = "";
-
-    const spots = [
-      { id: "rusty", label: "Rusty", style: "left:10%; bottom:20%; width:24%; height:30%;", important: true, action: talkRusty },
-      { id: "cooler", label: "⚠️ Cooler", style: "left:55%; bottom:18%; width:26%; height:24%;", important: true, action: examineCooler },
-      { id: "rival", label: "Rival Family", style: "left:35%; bottom:16%; width:22%; height:28%;", action: talkRival },
-      { id: "vending", label: "Vending", style: "left:78%; bottom:26%; width:16%; height:32%;", action: examineVending },
-      { id: "bench", label: "Bench", style: "left:5%; top:48%; width:20%; height:14%;", action: examineBench }
-    ];
-
-    spots.forEach(h => {
+    [
+      { label: "Rusty", style: "left:10%;bottom:20%;width:24%;height:30%;", important: true, action: talkRusty },
+      { label: "⚠️ Cooler", style: "left:55%;bottom:18%;width:26%;height:24%;", important: true, action: examineCooler },
+      { label: "Other Family", style: "left:35%;bottom:16%;width:22%;height:28%;", action: talkRival },
+      { label: "Vending", style: "left:78%;bottom:26%;width:16%;height:32%;", action: examineVending },
+      { label: "Bench", style: "left:5%;top:48%;width:20%;height:14%;", action: examineBench }
+    ].forEach(h => {
       const el = document.createElement("div");
       el.className = "hotspot" + (h.important ? " important" : "");
       el.style.cssText = h.style;
@@ -177,350 +214,325 @@
       hs.appendChild(el);
     });
     show("scene");
-
     if (!state.flags.visitedRest) {
       state.flags.visitedRest = true;
       state.statesVisited++;
-      setTimeout(() => {
-        say("You", "Another rest stop. The air smells like asphalt and questionable hot dogs.", [
-          { label: "Explore", fn: () => toast("Tap the glowing spots. Yellow ones are important.") }
-        ]);
-      }, 350);
+      setTimeout(() => say("You", "The air smells like hot asphalt and old coffee. Typical.", [
+        { label: "Look around", fn: () => toast("Tap people and objects to talk or use them.") }
+      ]), 300);
     }
   }
 
   function talkRusty() {
-    if (state.flags.talkedRusty) {
+    state.flags.talkedRusty++;
+    if (state.flags.talkedRusty === 1) {
+      say("Rusty", "Morning. Or afternoon. I stopped keeping track. Gas is high, coffee's worse. What do you need?", [
+        { label: "Just stretching our legs", fn: () => {
+          change("morale", 2);
+          say("Rusty", "Fair enough. Keep an eye on your stuff. People get sticky fingers around here.");
+        }},
+        { label: "Any problems I should know about?", fn: () => {
+          say("Rusty", "There's a family over by the picnic tables who already argued with two other groups. And somebody keeps opening coolers that aren't theirs.", [
+            { label: "I'll keep that in mind", fn: () => change("morale", 3) }
+          ]);
+        }},
+        { label: "You sell any of those bubble things or spitballs?", fn: () => buyFromRusty() }
+      ]);
+    } else if (state.flags.talkedRusty === 2) {
+      say("Rusty", "You again. Still here?", [
+        { label: "Yeah, just checking things", fn: () => say("Rusty", "Don't check too hard. Last person who 'checked' something walked off with a whole cooler.") },
+        { label: "Has the other family calmed down?", fn: () => {
+          if (state.flags.rivalState === "truce") say("Rusty", "Surprisingly, yes. Whatever you said worked.");
+          else say("Rusty", "No. They're still circling like hawks.");
+        }}
+      ]);
+    } else {
       const lines = [
-        { t: "Still here? Don't make me call the ranger again.", choices: [
-          { label: "We're leaving soon", fn: () => changeResource("morale", 2) },
-          { label: "Any gossip?", fn: () => say("Rusty", "The Hendersons are still mad about their cooler. And someone keeps putting gum on the benches.") }
-        ]},
-        { t: "You look like trouble. Or tired. Maybe both.", choices: [
-          { label: "Just tired", fn: () => changeResource("morale", 3, "Rusty almost smiles.") },
-          { label: "Definitely trouble", fn: () => changeResource("heat", 4, "Rusty narrows his eyes.") }
-        ]}
+        ["Rusty", "If you're looking for the world's largest ball of twine, it's still forty miles east. And still not worth it."],
+        ["Rusty", "Ranger came by earlier asking about missing snacks. You wouldn't know anything about that, would you?"],
+        ["Rusty", "I used to like this job. Then the highway got busier and the people got weirder."]
       ];
       const pick = lines[Math.floor(Math.random() * lines.length)];
-      say("Rusty", pick.t, pick.choices);
-      return;
+      say(pick[0], pick[1], [
+        { label: "See you around", fn: () => {} },
+        { label: "Buy something", fn: () => buyFromRusty() }
+      ]);
     }
-    state.flags.talkedRusty = true;
-    say("Rusty", "Welcome to Rusty's. Coffee is burnt, gas is expensive, and the ball of twine is forty miles that way. What do you want?", [
-      { label: "Just looking around", fn: () => {
-        changeResource("morale", 2);
-        say("Rusty", "Look all you want. Touch nothing that isn't yours.", [
-          { label: "Got it", fn: () => {} }
-        ]);
+  }
+
+  function buyFromRusty() {
+    say("Rusty", "I can sell you extra bubble mix for twelve bucks or a pack of spitballs for eight.", [
+      { label: "Bubbles ($12)", fn: () => {
+        if (state.resources.money >= 12) {
+          change("money", -12);
+          state.inventory.find(i => i.id === "bubbles").qty += 3;
+          toast("Got more bubble mix.");
+        } else toast("You don't have enough.");
       }},
-      { label: "Any trouble around here?", fn: () => {
-        say("Rusty", "There's a rival family parked over there. And people keep raiding coolers. I called the ranger twice this week.", [
-          { label: "Thanks for the warning", fn: () => changeResource("morale", 4, "Useful info. Morale up.") }
-        ]);
+      { label: "Spitballs ($8)", fn: () => {
+        if (state.resources.money >= 8) {
+          change("money", -8);
+          state.inventory.find(i => i.id === "spitballs").qty += 6;
+          toast("Spitball pack added.");
+        } else toast("You don't have enough.");
       }},
-      { label: "Sell me anything useful?", fn: () => {
-        say("Rusty", "I got extra bubble solution for $12, or a pack of spitballs for $8.", [
-          { label: "Buy bubbles ($12)", fn: () => {
-            if (state.resources.money >= 12) {
-              changeResource("money", -12);
-              useItem("bubbles", -3); // add
-              const b = state.inventory.find(i => i.id === "bubbles");
-              if (b) b.qty += 3;
-              toast("Bought more bubbles.");
-            } else toast("Not enough money.");
-          }},
-          { label: "Buy spitballs ($8)", fn: () => {
-            if (state.resources.money >= 8) {
-              changeResource("money", -8);
-              const s = state.inventory.find(i => i.id === "spitballs");
-              if (s) s.qty += 6;
-              toast("Spitball ammo acquired.");
-            } else toast("Not enough money.");
-          }},
-          { label: "Never mind", fn: () => {} }
-        ]);
-      }}
+      { label: "Never mind", fn: () => {} }
     ]);
   }
 
   function examineCooler() {
     if (state.flags.coolerTaken) {
-      say("Empty Cooler", "Just melted ice and a sad sticky note that says 'Hendersons were here'.", [
-        { label: "Walk away", fn: () => {} }
+      say("Cooler", "Empty. Just a puddle and a note that says 'Hendersons – seriously?'", [
+        { label: "Leave it", fn: () => {} }
       ]);
       return;
     }
-    say("⚠️ Unattended Cooler", "Big cooler, lid half-open. Sodas, sandwiches, and a bag of fancy chips. A name is written on the side: HENDERSONS – HANDS OFF.", [
-      { label: "Leave it alone (honest)", fn: () => {
-        changeResource("morale", 6, "You did the right thing. Family notices.");
-        state.flags.familyMood = "happy";
+    say("Cooler", "The lid is cracked open. Inside: sodas, a couple sandwiches, and a bag of chips that look expensive. Sharpie on the side says HENDERSONS – DO NOT TOUCH.", [
+      { label: "Close the lid and walk away", fn: () => {
+        change("morale", 5, "You left it alone.");
+        state.flags.familyTension = Math.max(0, state.flags.familyTension - 1);
       }},
-      { label: "Take the snacks (crime)", fn: () => {
+      { label: "Take the food", fn: () => {
         state.flags.coolerTaken = true;
-        changeResource("food", 12);
-        changeResource("heat", 20, "You stole the cooler contents. Heat is rising fast.");
-        state.inventory.push({ id: "stolen_chips", name: "Stolen Fancy Chips", qty: 1 });
-        state.flags.familyMood = "chaotic";
-        // Police chance
-        setTimeout(() => {
-          if (!state.flags.policeDone && state.resources.heat >= 15) triggerPolice();
-        }, 2000);
+        change("food", 11);
+        change("heat", 18, "You took their food. That might come back around.");
+        state.inventory.push({ id: "stolen_chips", name: "Someone Else's Chips", qty: 1 });
+        state.flags.familyTension += 1;
+        setTimeout(() => { if (!state.flags.policeDone && state.resources.heat >= 15) triggerPolice(); }, 2200);
       }},
-      { label: "Put gum on the handle as a prank", fn: () => {
-        if (!hasItem("gum")) { toast("No bubble gum left."); return; }
+      { label: "Stick gum on the handle", fn: () => {
+        if (!hasItem("gum")) { toast("You're out of gum."); return; }
         useItem("gum");
-        changeResource("heat", 6, "You stuck gum on the cooler. Petty, but funny.");
-        state.flags.gumInHair = true; // reused flag for prank
-        toast("Sticky prank complete.");
+        change("heat", 5, "You left a sticky surprise.");
+        state.flags.gumPrank = true;
       }}
     ]);
   }
 
   function talkRival() {
-    if (state.flags.rivalTruce) {
-      say("Rival Kid", "We're good. Just don't steal our shade again.", [
-        { label: "Peace", fn: () => {} }
+    if (state.flags.rivalState === "truce") {
+      say("Other Parent", "We're good. Just try not to park in the shade next time.", [
+        { label: "Will do", fn: () => {} }
       ]);
       return;
     }
-    if (state.flags.rivalMad) {
-      say("Rival Parent", "You again? We still haven't forgotten.", [
-        { label: "Try to apologize", fn: () => tryMakePeace() },
-        { label: "Pull out a weapon", fn: () => chooseWeapon() },
-        { label: "Walk away", fn: () => changeResource("morale", -3) }
+    if (state.flags.rivalState === "mad") {
+      say("Other Parent", "Oh, look who it is. Still got something to say?", [
+        { label: "I was out of line earlier", fn: () => tryPeace() },
+        { label: "You started it", fn: () => escalateRival() },
+        { label: "Pull out something from the bag", fn: () => chooseWeapon() }
       ]);
       return;
     }
-    say("Rival Parent", "This shade is ours today. Your big colorful camper is blocking the good spot.", [
-      { label: "Apologize and offer snacks", fn: () => {
-        if (state.resources.food >= 6) {
-          changeResource("food", -6);
-          state.flags.rivalTruce = true;
-          changeResource("morale", 10, "Truce achieved with snacks. Morale rises.");
-        } else {
-          toast("Not enough food to share.");
-          state.flags.rivalMad = true;
-        }
+    // neutral or annoyed
+    say("Other Parent", "We've been sitting here an hour. Your camper is blocking the only decent shade left.", [
+      { label: "Sorry — we'll move when we can", fn: () => {
+        change("morale", 3);
+        state.flags.rivalState = "annoyed";
+        say("Other Parent", "Appreciate it. It's been a long drive for us too.");
       }},
-      { label: "Argue back", fn: () => {
-        state.flags.rivalMad = true;
-        say("Rival Parent", "Oh, you want to go there?", [
-          { label: "Talk your way out", fn: () => tryMakePeace() },
-          { label: "Choose a silly weapon", fn: () => chooseWeapon() }
+      { label: "We got here first", fn: () => {
+        state.flags.rivalState = "mad";
+        say("Other Parent", "That so? You want to make this a whole thing?", [
+          { label: "Let's just drop it", fn: () => tryPeace() },
+          { label: "Yeah, maybe I do", fn: () => escalateRival() }
         ]);
       }},
-      { label: "Ignore them and leave", fn: () => {
-        changeResource("morale", -4, "They mutter as you walk off.");
-        state.flags.rivalMad = true;
+      { label: "Offer them some of our snacks", fn: () => {
+        if (state.resources.food < 6) { toast("You barely have enough for yourselves."); return; }
+        change("food", -6);
+        state.flags.rivalState = "truce";
+        change("morale", 9, "They take the snacks and ease up.");
       }}
     ]);
   }
 
-  function tryMakePeace() {
-    const success = state.resources.morale > 50 || Math.random() > 0.45;
+  function tryPeace() {
+    const bonus = personalities[state.playerPersonality]?.talkBonus || 0;
+    const success = (state.resources.morale + bonus) > 55 || Math.random() > 0.4;
     if (success) {
-      state.flags.rivalTruce = true;
-      state.flags.rivalMad = false;
-      changeResource("morale", 8, "You talked it out. Respect +1.");
+      state.flags.rivalState = "truce";
+      change("morale", 7, "You smoothed it over.");
     } else {
-      changeResource("morale", -6, "They didn't buy it. Still mad.");
-      changeResource("heat", 3);
+      change("morale", -5, "They didn't want to hear it.");
+      state.flags.rivalState = "mad";
     }
   }
 
+  function escalateRival() {
+    state.flags.rivalState = "mad";
+    change("morale", -4);
+    say("Other Parent", "Alright. What's it gonna be then?", [
+      { label: "Talk it out", fn: () => tryPeace() },
+      { label: "Grab something from your bag", fn: () => chooseWeapon() },
+      { label: "Walk away", fn: () => change("morale", -3, "You leave them fuming.") }
+    ]);
+  }
+
   function chooseWeapon() {
-    say("You", "What do you reach for?", [
-      { label: "Bubble Blaster – giant floating bubbles", fn: () => useWeapon("bubbles") },
+    say("You", "What do you pull out?", [
+      { label: "Bubble Blaster", fn: () => useWeapon("bubbles") },
       { label: "Spitball Shooter", fn: () => useWeapon("spitballs") },
       { label: "Foam Nunchucks", fn: () => useWeapon("nunchucks") },
-      { label: "Sticky Bubble Gum (aim for hair)", fn: () => useWeapon("gum") },
-      { label: "Never mind – talk instead", fn: () => tryMakePeace() }
+      { label: "Bubble Gum", fn: () => useWeapon("gum") },
+      { label: "Actually, never mind", fn: () => tryPeace() }
     ]);
   }
 
   function useWeapon(id) {
-    if (!hasItem(id) && id !== "nunchucks") {
-      toast("You're out of that!");
-      return;
-    }
+    if (id !== "nunchucks" && !hasItem(id)) { toast("You're out of that."); return; }
     if (id !== "nunchucks") useItem(id);
 
     if (id === "bubbles") {
-      say("Rival Kid", "Whoa—those bubbles are huge! They're floating everywhere!", [
-        { label: "Laugh it off", fn: () => {
-          state.flags.rivalTruce = true;
-          state.flags.rivalMad = false;
-          changeResource("morale", 12, "Bubbles win. Everyone cracks up.");
+      say("Other Kid", "Those are huge! They're just floating away!", [
+        { label: "Hard to stay mad after that", fn: () => {
+          state.flags.rivalState = "truce";
+          change("morale", 10, "The bubbles broke the tension.");
         }}
       ]);
     } else if (id === "spitballs") {
-      say("Rival Parent", "Did you just spitball me?! This means war… or at least a stern talking-to.", [
-        { label: "Apologize quickly", fn: () => {
-          changeResource("morale", -2);
-          changeResource("heat", 5, "Spitballs escalate things. Heat up.");
-          state.flags.rivalMad = true;
+      say("Other Parent", "Did you seriously just shoot a spitball at me?", [
+        { label: "It was an accident", fn: () => {
+          change("heat", 6);
+          change("morale", -3, "They don't believe you.");
+          state.flags.rivalState = "mad";
         }},
-        { label: "Double down", fn: () => {
-          changeResource("heat", 10);
-          changeResource("morale", -5, "Chaos. Family is embarrassed.");
-          state.flags.rivalMad = true;
+        { label: "Yeah I did", fn: () => {
+          change("heat", 9);
+          change("morale", -6);
+          state.flags.rivalState = "mad";
+          toast("That made everything worse.");
         }}
       ]);
     } else if (id === "nunchucks") {
-      say("Rival Parent", "Are those… foam nunchucks? You look ridiculous.", [
-        { label: "Strike a cool pose anyway", fn: () => {
-          const win = Math.random() > 0.5;
-          if (win) {
-            state.flags.rivalTruce = true;
-            changeResource("morale", 9, "Somehow the pose worked. They back off laughing.");
+      say("Other Parent", "Are those foam? You look like you're about to trip over yourself.", [
+        { label: "Try a spin anyway", fn: () => {
+          if (Math.random() > 0.45) {
+            state.flags.rivalState = "truce";
+            change("morale", 8, "Somehow it worked. They're laughing.");
           } else {
-            changeResource("morale", -7, "You trip over your own nunchucks. Dignity lost.");
-            state.flags.rivalMad = true;
+            change("morale", -8, "You nearly hit yourself. They laugh for a different reason.");
+            state.flags.rivalState = "mad";
           }
         }}
       ]);
     } else if (id === "gum") {
-      say("Rival Kid", "Hey! There's gum in my hair!!", [
-        { label: "Pretend it wasn't you", fn: () => {
-          changeResource("heat", 8, "Gum-in-hair is a classic. Heat +8.");
-          state.flags.gumInHair = true;
-          state.flags.rivalMad = true;
+      say("Other Kid", "There's gum in my hair! Who does that?!", [
+        { label: "Help get it out", fn: () => {
+          change("morale", 2);
+          state.flags.rivalState = "annoyed";
+          toast("You help a little. They're still annoyed.");
         }},
-        { label: "Help them get it out (kind of)", fn: () => {
-          changeResource("morale", 5, "You help a little. They still glare.");
-          state.flags.rivalMad = true;
+        { label: "Shrug", fn: () => {
+          change("heat", 7);
+          change("morale", -4);
+          state.flags.rivalState = "mad";
         }}
       ]);
     }
   }
 
   function examineVending() {
-    say("Vending Machine", "Mostly empty. There's warm soda and something labeled 'Meat Stick???'.", [
-      { label: "Buy soda ($3)", fn: () => {
+    say("Vending Machine", "Half the buttons are sold out. What's left looks like it's been there since last summer.", [
+      { label: "Buy a soda ($3)", fn: () => {
         if (state.resources.money >= 3) {
-          changeResource("money", -3);
-          changeResource("food", 2, "Warm soda obtained.");
-        } else toast("Broke.");
+          change("money", -3);
+          change("food", 2, "Warm soda. Better than nothing.");
+        } else toast("Not enough money.");
       }},
-      { label: "Shake it", fn: () => {
-        if (Math.random() > 0.55) {
-          changeResource("food", 2, "A snack dropped!");
+      { label: "Give it a shove", fn: () => {
+        if (Math.random() > 0.5) {
+          change("food", 2, "Something fell. Lucky.");
         } else {
-          changeResource("heat", 4, "It beeps angrily. You look suspicious.");
+          change("heat", 3, "It beeps. You step back.");
         }
       }},
-      { label: "Leave", fn: () => {} }
+      { label: "Walk away", fn: () => {} }
     ]);
   }
 
   function examineBench() {
-    const gumText = state.flags.gumInHair
-      ? "There's already gum stuck under this bench. Looks familiar."
-      : "A normal wooden bench with years of carved initials.";
-    say("Bench", gumText, [
-      { label: "Sit for a minute", fn: () => changeResource("morale", 3, "A short rest helps.") },
-      { label: "Move on", fn: () => {} }
+    const extra = state.flags.gumPrank ? " There's already gum stuck under one corner." : "";
+    say("Bench", "Weathered wood, carved initials, a few bird droppings." + extra, [
+      { label: "Sit down a minute", fn: () => change("morale", 3, "A short break helps.") },
+      { label: "Keep moving", fn: () => {} }
     ]);
   }
 
   function triggerPolice() {
     if (state.flags.policeDone) return;
     state.flags.policeDone = true;
-    say("Ranger Dale", "We've had complaints about cooler theft and general nonsense. Anyone want to explain themselves?", [
-      { label: "Talk your way out honestly", fn: () => {
-        const success = state.resources.morale > 55 || state.flags.talkedRusty;
-        if (success) {
-          changeResource("heat", -15, "Ranger believes you… mostly. Heat drops.");
+    say("Ranger", "We've had reports of people helping themselves to coolers that aren't theirs. Anybody want to clear that up?", [
+      { label: "We didn't take anything", fn: () => {
+        const bonus = personalities[state.playerPersonality]?.talkBonus || 0;
+        if (state.resources.morale + bonus > 58 || state.flags.talkedRusty > 0) {
+          change("heat", -12, "He seems to believe you.");
         } else {
-          changeResource("money", -30);
-          changeResource("heat", 5, "Fine issued. $30 lighter.");
+          change("money", -28);
+          change("heat", 4, "He writes a fine anyway.");
         }
       }},
-      { label: "Blame the rival family", fn: () => {
-        changeResource("heat", 8);
-        changeResource("morale", -4, "Ranger doesn't buy it. You look worse.");
-        changeResource("money", -20);
+      { label: "It was already open", fn: () => {
+        change("heat", 6);
+        change("money", -22, "Weak excuse. Still a fine.");
       }},
-      { label: "Stay quiet and pay", fn: () => {
-        changeResource("money", -35);
-        changeResource("morale", -10, "Quiet payment. Family is quiet too… in a bad way.");
-      }},
-      { label: "Distract with bubbles", fn: () => {
-        if (hasItem("bubbles")) {
-          useItem("bubbles");
-          changeResource("heat", 12, "Bubbles everywhere. Ranger is not amused. Heat up.");
-          changeResource("money", -25);
-        } else toast("No bubbles left.");
+      { label: "Just pay and leave", fn: () => {
+        change("money", -32);
+        change("morale", -8, "You pay. Nobody's happy about it.");
       }}
     ]);
   }
 
-  // ---------- Campground ----------
+  // ---------- CAMPGROUND ----------
   function enterCampground() {
-    if (!state.flags.visitedCamp) {
-      state.flags.visitedCamp = true;
-      state.statesVisited++;
-    }
-    say("Shady Pines Campground", "The sun is going down. Your camper is parked under the trees. You hear rustling near the back storage.", [
-      { label: "Investigate the noise", fn: () => {
-        say("Possible Burglary", "Someone is fiddling with the storage latch!", [
-          { label: "Yell loudly", fn: () => {
-            changeResource("morale", 5, "They bolt. Camper safe.");
-            log("Scared off a campground prowler.");
+    if (!state.flags.visitedCamp) { state.flags.visitedCamp = true; state.statesVisited++; }
+    say("Shady Pines", "It's getting dark. Your camper is under the trees. Something scrapes near the back storage door.", [
+      { label: "Go check", fn: () => {
+        say("Behind the Camper", "Someone's trying the latch on the storage compartment.", [
+          { label: "Yell at them", fn: () => {
+            change("morale", 4, "They take off running.");
+            log("Ran off a prowler at the campground.");
             show("hub");
           }},
-          { label: "Use Bubble Blaster", fn: () => {
+          { label: "Hit them with bubbles", fn: () => {
             if (hasItem("bubbles")) {
               useItem("bubbles");
-              changeResource("morale", 9, "Giant bubbles startle the thief into running.");
-              log("Bubbles saved the camper.");
+              change("morale", 7, "Big bubbles. They panic and run.");
+              log("Bubbles handled the situation.");
             } else {
-              changeResource("food", -6, "No bubbles. They got some food.");
+              change("food", -5, "No bubbles left. They got into the snacks.");
             }
             show("hub");
           }},
-          { label: "Spitball ambush", fn: () => {
-            if (hasItem("spitballs")) {
-              useItem("spitballs", 2);
-              changeResource("morale", 6, "Spitball barrage! Thief flees in confusion.");
-            } else changeResource("food", -5);
-            show("hub");
-          }},
-          { label: "Hide and stay quiet", fn: () => {
-            changeResource("food", -10);
-            changeResource("morale", -12, "They took food. Family feels unsafe.");
-            log("Lost supplies in a quiet burglary.");
+          { label: "Stay quiet and watch", fn: () => {
+            change("food", -9);
+            change("morale", -10, "They took food and left. Everyone's on edge.");
+            log("Lost supplies overnight.");
             show("hub");
           }}
         ]);
       }},
-      { label: "Lock up and stay inside", fn: () => {
-        changeResource("morale", -2);
-        toast("Safe night. A little tense.");
-        log("Played it safe at campground.");
+      { label: "Lock everything and stay inside", fn: () => {
+        change("morale", -2);
+        log("Stayed locked in. Quiet night.");
         show("hub");
       }}
     ]);
   }
 
-  // ---------- Diner ----------
+  // ---------- DINER ----------
   function enterDiner() {
-    if (!state.flags.visitedDiner) {
-      state.flags.visitedDiner = true;
-      state.statesVisited++;
-    }
+    if (!state.flags.visitedDiner) { state.flags.visitedDiner = true; state.statesVisited++; }
     $("#scene-bg").className = "diner";
-    $("#scene-title").textContent = "Neon Diner & Gift Shop";
+    $("#scene-title").textContent = "Neon Diner";
     const hs = $("#hotspots");
     hs.innerHTML = "";
-
-    const spots = [
-      { label: "Waitress", style: "left:20%; bottom:22%; width:22%; height:28%;", important: true, action: talkWaitress },
-      { label: "Gift Shelf", style: "left:60%; bottom:20%; width:24%; height:26%;", action: examineGifts },
-      { label: "Jukebox", style: "left:8%; top:42%; width:18%; height:20%;", action: examineJukebox },
-      { label: "Other Diners", style: "left:42%; bottom:18%; width:20%; height:24%;", action: talkDiners }
-    ];
-    spots.forEach(h => {
+    [
+      { label: "Waitress", style: "left:18%;bottom:22%;width:24%;height:28%;", important: true, action: talkWaitress },
+      { label: "Gift Shelf", style: "left:58%;bottom:20%;width:24%;height:26%;", action: examineGifts },
+      { label: "Jukebox", style: "left:6%;top:42%;width:18%;height:20%;", action: examineJukebox },
+      { label: "Guy at Counter", style: "left:40%;bottom:18%;width:20%;height:24%;", action: talkCounter }
+    ].forEach(h => {
       const el = document.createElement("div");
       el.className = "hotspot" + (h.important ? " important" : "");
       el.style.cssText = h.style;
@@ -529,40 +541,52 @@
       hs.appendChild(el);
     });
     show("scene");
-    toast("Neon lights buzz. Coffee smells strong.");
   }
 
   function talkWaitress() {
-    say("Waitress Dot", "What'll it be, hon? Menu's short: burgers, pie, and regret.", [
-      { label: "Order food for the family ($18)", fn: () => {
-        if (state.resources.money >= 18) {
-          changeResource("money", -18);
-          changeResource("food", 15);
-          changeResource("morale", 12, "Real food! Family cheers.");
-          state.flags.familyMood = "happy";
-        } else toast("Not enough cash.");
-      }},
-      { label: "Just coffee ($3)", fn: () => {
-        if (state.resources.money >= 3) {
-          changeResource("money", -3);
-          changeResource("morale", 4, "Coffee helps a little.");
-        }
-      }},
-      { label: "Ask about the road ahead", fn: () => {
-        say("Waitress Dot", "Next stretch is quiet until the big campground. Watch for rangers if you've been… creative.", [
-          { label: "Thanks", fn: () => changeResource("morale", 3) }
-        ]);
-      }}
-    ]);
+    state.flags.waitressTalks++;
+    if (state.flags.waitressTalks === 1) {
+      say("Waitress", "You look like you've been in a car too long. What can I get you?", [
+        { label: "Food for everyone ($18)", fn: () => {
+          if (state.resources.money >= 18) {
+            change("money", -18);
+            change("food", 14);
+            change("morale", 11, "Actual hot food. Big improvement.");
+          } else toast("You can't cover the whole table.");
+        }},
+        { label: "Just coffee ($3)", fn: () => {
+          if (state.resources.money >= 3) {
+            change("money", -3);
+            change("morale", 3, "Coffee helps a little.");
+          }
+        }},
+        { label: "How's the road look from here?", fn: () => {
+          say("Waitress", "Quiet until the campground. Rangers have been checking coolers and bags more than usual this week.", [
+            { label: "Good to know", fn: () => change("morale", 2) }
+          ]);
+        }}
+      ]);
+    } else {
+      say("Waitress", "Back already? Pie's still available if you want it.", [
+        { label: "Slice of pie ($5)", fn: () => {
+          if (state.resources.money >= 5) {
+            change("money", -5);
+            change("food", 3);
+            change("morale", 5, "Pie was worth it.");
+          }
+        }},
+        { label: "We're good", fn: () => {} }
+      ]);
+    }
   }
 
   function examineGifts() {
-    say("Gift Shelf", "Snow globes, keychains, and a rubber chicken wearing sunglasses.", [
-      { label: "Buy rubber chicken ($7)", fn: () => {
+    say("Gift Shelf", "Keychains, snow globes, and a rubber chicken in sunglasses.", [
+      { label: "Buy the chicken ($7)", fn: () => {
         if (state.resources.money >= 7) {
-          changeResource("money", -7);
-          state.inventory.push({ id: "chicken", name: "Rubber Chicken", desc: "For reasons", qty: 1 });
-          changeResource("morale", 5, "Why did you buy this? Family laughs.");
+          change("money", -7);
+          state.inventory.push({ id: "chicken", name: "Rubber Chicken", desc: "No practical use", qty: 1 });
+          change("morale", 4, "Someone in the family already loves it.");
         }
       }},
       { label: "Leave it", fn: () => {} }
@@ -570,101 +594,163 @@
   }
 
   function examineJukebox() {
-    say("Jukebox", "It only plays three songs, all from 1978.", [
-      { label: "Play something anyway ($1)", fn: () => {
+    say("Jukebox", "Three songs, all from the late seventies. The buttons stick.", [
+      { label: "Play one ($1)", fn: () => {
         if (state.resources.money >= 1) {
-          changeResource("money", -1);
-          changeResource("morale", 6, "Terrible song. Perfect for the trip.");
+          change("money", -1);
+          change("morale", 5, "It's bad. It's perfect.");
         }
       }},
-      { label: "Skip", fn: () => {} }
+      { label: "Don't bother", fn: () => {} }
     ]);
   }
 
-  function talkDiners() {
-    say("Local at Counter", "You folks look like you've been on the road a while. Saw a ranger car earlier… they seemed annoyed.", [
-      { label: "Thanks for the tip", fn: () => changeResource("morale", 2) },
-      { label: "Offer a spitball truce", fn: () => {
-        if (hasItem("spitballs")) {
-          useItem("spitballs");
-          changeResource("morale", 4, "They chuckle and accept the weird peace offering.");
-        } else toast("No spitballs.");
+  function talkCounter() {
+    say("Guy at Counter", "You folks with the big painted camper? Saw a ranger asking about a cooler earlier.", [
+      { label: "Thanks for the heads-up", fn: () => change("morale", 2) },
+      { label: "We don't know anything about that", fn: () => {
+        if (state.flags.coolerTaken) change("heat", 2);
+        toast("He just nods and goes back to his coffee.");
       }}
     ]);
   }
 
-  // ---------- Family talk ----------
+  // ---------- FAMILY TALK (many variations) ----------
   function talkFamily() {
-    const moods = {
-      normal: [
-        "Dad is studying the map like it holds ancient secrets.",
-        "Someone is already bored and kicking the seat.",
-        "The snacks are being negotiated again."
-      ],
-      happy: [
-        "Everyone is humming the same terrible song.",
-        "Little one is drawing the camper in a notebook.",
-        "Mom says this might actually be fun."
-      ],
-      grumpy: [
-        "Silence. The dangerous kind.",
-        "Someone muttered 'are we there yet' for the twelfth time.",
-        "The last bag of chips is being guarded fiercely."
-      ],
-      chaotic: [
-        "An argument about who lost the good marker is ongoing.",
-        "Someone is practicing nunchuck moves in the aisle.",
-        "Bubble solution was spilled earlier. It's still sticky."
-      ]
-    };
-    const list = moods[state.flags.familyMood] || moods.normal;
-    const line = list[Math.floor(Math.random() * list.length)];
-    say("Family", line, [
-      { label: "Encourage them", fn: () => {
-        changeResource("morale", 5, "A little encouragement helps.");
-        if (state.flags.familyMood === "grumpy") state.flags.familyMood = "normal";
-      }},
-      { label: "Start a silly argument on purpose", fn: () => {
-        changeResource("morale", -4);
-        state.flags.familyMood = "chaotic";
-        toast("You poked the bear. Chaos rises.");
-      }},
-      { label: "Suggest using the Bubble Blaster later", fn: () => {
-        changeResource("morale", 3);
-        toast("They like that idea.");
-      }}
-    ]);
+    const playerP = state.playerPersonality;
+    const others = state.family.filter(f => !f.isPlayer);
+    const someone = others[Math.floor(Math.random() * others.length)] || { name: "Someone", personality: "quiet" };
+
+    const scenes = [
+      {
+        speaker: someone.name,
+        text: someone.personality === "grumpy"
+          ? "We've been in this thing for hours. My legs are numb."
+          : someone.personality === "loud"
+          ? "Can we stop soon? I need to run around or I'm gonna lose it."
+          : "How much longer until the next stop?",
+        choices: [
+          { label: "We'll stop soon", fn: () => change("morale", 3) },
+          { label: "Stop complaining", fn: () => {
+            change("morale", -5);
+            state.flags.familyTension += 1;
+            toast("That didn't help.");
+          }},
+          { label: "Suggest a game or song", fn: () => change("morale", 6, "Distraction works for a while.") }
+        ]
+      },
+      {
+        speaker: "Dad",
+        text: "I think if we take the next exit we can cut twenty minutes off. The map says so.",
+        choices: [
+          { label: "Let's try it", fn: () => {
+            if (Math.random() > 0.5) {
+              change("gas", 3, "Shortcut actually helped.");
+            } else {
+              change("gas", -5, "It added time. Of course it did.");
+              change("morale", -3);
+            }
+          }},
+          { label: "Stay on the main road", fn: () => change("morale", 1) },
+          { label: "Argue about the map", fn: () => {
+            change("morale", -6);
+            state.flags.familyTension += 1;
+            toast("Map argument achieved.");
+          }}
+        ]
+      },
+      {
+        speaker: "Mom",
+        text: "Has anyone seen the good snacks? The ones I specifically said to save?",
+        choices: [
+          { label: "I think someone already ate them", fn: () => {
+            change("morale", -4);
+            state.flags.familyTension += 1;
+          }},
+          { label: "They're still in the back", fn: () => change("morale", 2) },
+          { label: "Blame the youngest", fn: () => {
+            change("morale", -5);
+            toast("Now two people are upset.");
+          }}
+        ]
+      },
+      {
+        speaker: someone.name,
+        text: "Remember when we used to take normal vacations? With planes?",
+        choices: [
+          { label: "This is more memorable", fn: () => change("morale", 4) },
+          { label: "Yeah… this is a lot", fn: () => change("morale", -2) },
+          { label: "At least we're together", fn: () => {
+            change("morale", 7, "That landed better than expected.");
+            state.flags.familyTension = Math.max(0, state.flags.familyTension - 1);
+          }}
+        ]
+      },
+      {
+        speaker: "Younger Brother",
+        text: "If I have to listen to that same playlist one more time I'm walking the rest of the way.",
+        choices: [
+          { label: "Change the music", fn: () => change("morale", 5) },
+          { label: "It's my car, my rules", fn: () => {
+            change("morale", -6);
+            state.flags.familyTension += 1;
+          }},
+          { label: "Let him pick the next three songs", fn: () => change("morale", 6, "Bribery works.") }
+        ]
+      }
+    ];
+
+    // personality-flavored player options sometimes
+    if (playerP === "troublemaker" && Math.random() > 0.6) {
+      scenes.push({
+        speaker: "You",
+        text: "You could start something just to break the boredom.",
+        choices: [
+          { label: "Start a harmless argument on purpose", fn: () => {
+            change("morale", -3);
+            state.flags.familyTension += 1;
+            toast("You poked the bear. It's awake now.");
+          }},
+          { label: "Suggest using the Bubble Blaster later", fn: () => change("morale", 4) },
+          { label: "Leave it alone", fn: () => {} }
+        ]
+      });
+    }
+
+    const scene = scenes[Math.floor(Math.random() * scenes.length)];
+    say(scene.speaker, scene.text, scene.choices);
   }
 
-  // ---------- Init & Buttons ----------
+  // ---------- WIRE UP ----------
   function init() {
+    $("#family-size").addEventListener("change", buildFamilySetupUI);
+    buildFamilySetupUI();
+
     $("#btn-start").onclick = () => show("family");
 
     $("#btn-family-done").onclick = () => {
-      state.playerRole = $("#player-role").value;
-      state.familySize = parseInt($("#family-size").value, 10);
       buildFamily();
       if (state.familySize >= 5) {
         state.resources.food = 48;
         state.resources.money = 95;
       }
       show("hub");
-      log("Family packed. Day 1 begins.");
+      log("Everyone's in. Day 1.");
     };
 
     $("#btn-rest").onclick = () => {
-      changeResource("morale", 14);
-      changeResource("food", -3);
-      log("Rested. Morale up, some food eaten.");
-      if (Math.random() > 0.7) advanceDay("A quiet night passes.");
+      change("morale", 12);
+      change("food", -3);
+      log("Rested.");
+      if (Math.random() > 0.65) advanceDay("Night passes.");
     };
 
     $("#btn-eat").onclick = () => {
       if (state.resources.food < 7) { toast("Not enough food."); return; }
-      changeResource("food", -7);
-      changeResource("morale", 15, "Good meal. Spirits lifted.");
-      state.flags.familyMood = "happy";
-      log("Family ate together.");
+      change("food", -7);
+      change("morale", 13, "Everyone eats. Mood improves.");
+      state.flags.familyTension = Math.max(0, state.flags.familyTension - 1);
+      log("Ate together.");
     };
 
     $("#btn-talk-family").onclick = talkFamily;
@@ -675,30 +761,20 @@
     $$(".dest").forEach(btn => {
       btn.onclick = () => {
         const dest = btn.dataset.dest;
-        changeResource("gas", -8);
-        changeResource("food", -4);
-        // Travel always advances time a bit
-        if (Math.random() > 0.4) advanceDay("The road rolls on…");
+        change("gas", -8);
+        change("food", -3 - Math.floor(state.familySize / 3));
+        if (Math.random() > 0.35) advanceDay("Miles go by.");
 
-        if (dest === "reststop") {
-          enterReststop();
-          log("Arrived at Rusty's Rest Stop.");
-        } else if (dest === "campground") {
-          enterCampground();
-        } else if (dest === "diner") {
-          enterDiner();
-          log("Pulled into the Neon Diner.");
-        }
+        if (dest === "reststop") { enterReststop(); log("Stopped at Rusty's."); }
+        else if (dest === "campground") { enterCampground(); }
+        else if (dest === "diner") { enterDiner(); log("Pulled into the diner."); }
         updateHub();
       };
     });
 
     $("#btn-leave").onclick = () => {
       show("hub");
-      log("Returned to the camper.");
-      if (state.statesVisited >= 2 && state.day < 3) {
-        toast("You're making progress. Keep going.");
-      }
+      log("Back at the camper.");
     };
 
     $("#btn-inventory").onclick = openInv;

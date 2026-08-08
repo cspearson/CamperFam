@@ -10,7 +10,6 @@
 <body>
   <div id="app">
 
-    <!-- TITLE -->
     <section id="screen-title" class="screen active">
       <div class="title-content">
         <h1>Camper Quest</h1>
@@ -19,10 +18,9 @@
       </div>
     </section>
 
-    <!-- FAMILY -->
     <section id="screen-family" class="screen">
-      <h2>Create Your Family</h2>
-      <div class="card">
+      <h2>Build Your Family</h2>
+      <div class="card family-card">
         <label>You are the:
           <select id="player-role">
             <option value="Older Sister">Older Sister</option>
@@ -32,20 +30,29 @@
             <option value="Younger Sibling">Younger Sibling</option>
           </select>
         </label>
-        <label>Family size:
-          <select id="family-size">
-            <option value="3">3 (easier)</option>
-            <option value="4" selected>4</option>
-            <option value="5">5</option>
-            <option value="6">6 (more chaos)</option>
+        <label>Your personality:
+          <select id="player-personality">
+            <option value="sarcastic">Sarcastic</option>
+            <option value="peacemaker">Peacemaker</option>
+            <option value="troublemaker">Troublemaker</option>
+            <option value="anxious">Anxious</option>
+            <option value="optimistic">Optimistic</option>
           </select>
         </label>
-        <p class="hint">Bigger families use more food and create more arguments.</p>
+        <label>Family size:
+          <select id="family-size">
+            <option value="3">3</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+          </select>
+        </label>
+        <div id="family-members-setup"></div>
+        <p class="hint">Personalities change how people react and what they say.</p>
       </div>
       <button id="btn-family-done" class="btn primary">Hit the Road</button>
     </section>
 
-    <!-- HUB -->
     <section id="screen-hub" class="screen">
       <div class="day-banner">Day <span id="day-num">1</span> • <span id="day-label">Leaving Home</span></div>
       <h2>The Camper</h2>
@@ -67,7 +74,6 @@
       <div id="hub-log" class="log"></div>
     </section>
 
-    <!-- MAP -->
     <section id="screen-map" class="screen">
       <div class="day-banner">Day <span id="map-day">1</span></div>
       <h2>Where to next?</h2>
@@ -79,7 +85,6 @@
       <button id="btn-map-back" class="btn secondary">Back to Camper</button>
     </section>
 
-    <!-- POINT & CLICK SCENE -->
     <section id="screen-scene" class="screen">
       <div id="scene-stage">
         <div id="scene-bg"></div>
@@ -94,7 +99,6 @@
       </div>
     </section>
 
-    <!-- DIALOGUE -->
     <div id="dialogue" class="overlay hidden">
       <div class="dialogue-panel">
         <div id="dlg-speaker"></div>
@@ -103,7 +107,6 @@
       </div>
     </div>
 
-    <!-- INVENTORY / GEAR -->
     <div id="inventory" class="overlay hidden">
       <div class="inv-panel">
         <h3>Gear & Inventory</h3>
@@ -112,9 +115,7 @@
       </div>
     </div>
 
-    <!-- TOAST -->
     <div id="toast" class="toast hidden"></div>
-
   </div>
   <script src="game.js"></script>
 </body>
