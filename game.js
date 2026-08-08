@@ -59,8 +59,139 @@
       visitedBluegrass: false,
       foundTwinJunk: false
     },
-    statesVisited: 0
+    statesVisited: 0,
+    currentState: "TN",
+    unlockedStates: ["TN"],
+    pendingState: null
   };
+
+
+  const STATE_INFO = {
+    TN: { name: "Tennessee", places: [
+      { id: "reststop", label: "Rusty's Roadside Rest Stop" },
+      { id: "campground", label: "Shady Pines Campground" },
+      { id: "diner", label: "Neon Diner & Gift Shop" }
+    ]},
+    KY: { name: "Kentucky", places: [
+      { id: "bluegrass", label: "Bluegrass Welcome Center" },
+      { id: "reststop", label: "Rest Area" }
+    ]},
+    OH: { name: "Ohio", places: [
+      { id: "twinlakes", label: "Twin Lakes Overlook" },
+      { id: "diner", label: "Lakeside Diner" }
+    ]},
+    IN: { name: "Indiana", places: [
+      { id: "reststop", label: "Cornfield Rest Stop" },
+      { id: "campground", label: "Hoosier Campground" }
+    ]},
+    AL: { name: "Alabama", places: [
+      { id: "campground", label: "Pine Campground" },
+      { id: "diner", label: "Southern Diner" }
+    ]},
+    GA: { name: "Georgia", places: [
+      { id: "diner", label: "Peach Stand Diner" },
+      { id: "reststop", label: "I-75 Rest Stop" }
+    ]},
+    NC: { name: "North Carolina", places: [
+      { id: "campground", label: "Blue Ridge Camp" },
+      { id: "twinlakes", label: "Mountain Overlook" }
+    ]},
+    VA: { name: "Virginia", places: [
+      { id: "reststop", label: "Shenandoah Stop" },
+      { id: "diner", label: "Valley Diner" }
+    ]},
+    FL: { name: "Florida", places: [
+      { id: "diner", label: "Orange Grove Cafe" },
+      { id: "campground", label: "Coastal Camp" }
+    ]},
+    TX: { name: "Texas", places: [
+      { id: "reststop", label: "Big Sky Rest Stop" },
+      { id: "diner", label: "BBQ Diner" },
+      { id: "campground", label: "Prairie Camp" }
+    ]}
+  };
+
+  const MAP_STATES = ["TN","KY","OH","IN","AL","GA","NC","VA","FL","TX"];
+
+  function showMap() {
+    $("#map-day").textContent = state.day;
+    $("#map-state-label").textContent = STATE_INFO[state.currentState]?.name || state.currentState;
+    const usa = $("#usa-map");
+    const local = $("#local-places");
+    usa.innerHTML = "";
+    usa.classList.remove("hidden");
+    local.classList.add("hidden");
+    $("#map-heading").textContent = "USA Road Map";
+    $("#map-hint").textContent = "Tap a state to drive there. Your current state shows local places.";
+
+    // Current state button for local places
+    const here = document.createElement("button");
+    here.className = "btn dest primary";
+    here.textContent = "📍 Places in " + (STATE_INFO[state.currentState]?.name || "this state");
+    here.onclick = () => showLocalPlaces();
+    usa.appendChild(here);
+
+    MAP_STATES.forEach(code => {
+      const info = STATE_INFO[code];
+      const btn = document.createElement("button");
+      const unlocked = state.unlockedStates.includes(code);
+      const current = state.currentState === code;
+      btn.className = "btn dest state-btn" + (current ? " current-state" : "") + (unlocked ? " unlocked" : "");
+      btn.textContent = (current ? "★ " : "") + info.name + (unlocked ? "" : " 🔒");
+      btn.onclick = () => {
+        if (code === state.currentState) {
+          showLocalPlaces();
+          return;
+        }
+        // Drive to new state
+        state.pendingState = code;
+        change("gas", -6);
+        change("food", -2);
+        startHighway();
+        log("Driving toward " + info.name + "…");
+      };
+      usa.appendChild(btn);
+    });
+    show("map");
+  }
+
+  function showLocalPlaces() {
+    const usa = $("#usa-map");
+    const local = $("#local-places");
+    usa.classList.add("hidden");
+    local.classList.remove("hidden");
+    local.innerHTML = "";
+    $("#map-heading").textContent = "Places in " + (STATE_INFO[state.currentState]?.name || "");
+    $("#map-hint").textContent = "No extra drive needed — you're already here.";
+    const places = STATE_INFO[state.currentState]?.places || [];
+    places.forEach(p => {
+      const btn = document.createElement("button");
+      btn.className = "btn dest";
+      btn.textContent = p.label;
+      btn.onclick = () => {
+        change("gas", -3);
+        change("food", -2);
+        if (Math.random() > 0.5) advanceDay("A short hop across town.");
+        goToPlace(p.id);
+      };
+      local.appendChild(btn);
+    });
+    const back = document.createElement("button");
+    back.className = "btn secondary";
+    back.textContent = "← Back to states";
+    back.onclick = () => showMap();
+    local.appendChild(back);
+  }
+
+  function goToPlace(id) {
+    if (id === "reststop") { enterReststop(); log("Stopped at a rest stop."); }
+    else if (id === "campground") { enterCampground(); }
+    else if (id === "diner") { enterDiner(); log("Pulled into a diner."); }
+    else if (id === "twinlakes") { enterTwinLakes(); log("Overlook."); }
+    else if (id === "bluegrass") { enterBluegrass(); log("Welcome center."); }
+    else if (id === "highway") { startHighway(); }
+    updateHub();
+  }
 
   const personalities = {
     sarcastic: { label: "Sarcastic", talkBonus: 0 },
@@ -394,26 +525,26 @@
     const role = state.playerRole || "Older Sister";
     const tone = familyTone();
     if (role === "Dad") {
-      if (tone === "light") return "player-dad-light.jpg";
-      if (tone === "dark") return "player-dad-dark.jpg";
-      return "player-dad.jpg";
+      if (tone === "light") return "player-dad-light.png";
+      if (tone === "dark") return "player-dad-dark.png";
+      return "player-dad.png";
     }
     if (role === "Mom") {
-      if (tone === "dark") return "player-mom-dark.jpg";
-      if (tone === "medium") return "player-mom-medium.jpg";
-      return "player-mom.jpg";
+      if (tone === "dark") return "player-mom-dark.png";
+      if (tone === "medium") return "player-mom-medium.png";
+      return "player-mom.png";
     }
     if (role === "Older Brother" || role === "Younger Sibling") {
-      if (tone === "red") return "player-brother-red.jpg";
-      if (tone === "dark") return "player-brother-dark.jpg";
-      if (tone === "medium") return "player-brother-brown.jpg";
-      return "player-brother.jpg";
+      if (tone === "red") return "player-brother-red.png";
+      if (tone === "dark") return "player-brother-dark.png";
+      if (tone === "medium") return "player-brother-brown.png";
+      return "player-brother.png";
     }
     // sister / default
-    if (tone === "red") return "player-sister-red.jpg";
-    if (tone === "dark") return "player-sister-dark.jpg";
-    if (tone === "light") return "player-sister-blond.jpg";
-    return "player-sister.jpg";
+    if (tone === "red") return "player-sister-red.png";
+    if (tone === "dark") return "player-sister-dark.png";
+    if (tone === "light") return "player-sister-blond.png";
+    return "player-sister.png";
   }
 
   function getFamilyMemberSprite(member) {
@@ -421,34 +552,34 @@
     const role = member.role || member.name || "";
     const tone = familyTone();
     if (role === "Dad") {
-      if (tone === "light") return "player-dad-light.jpg";
-      if (tone === "dark") return "player-dad-dark.jpg";
-      return "player-dad.jpg";
+      if (tone === "light") return "player-dad-light.png";
+      if (tone === "dark") return "player-dad-dark.png";
+      return "player-dad.png";
     }
     if (role === "Mom") {
-      if (tone === "dark") return "player-mom-dark.jpg";
-      if (tone === "medium") return "player-mom-medium.jpg";
-      return "player-mom.jpg";
+      if (tone === "dark") return "player-mom-dark.png";
+      if (tone === "medium") return "player-mom-medium.png";
+      return "player-mom.png";
     }
     if (role === "Little Sister") {
-      return tone === "dark" ? "player-littlesis-dark.jpg" : "player-littlesis.jpg";
+      return tone === "dark" ? "player-littlesis-dark.png" : "player-littlesis.png";
     }
     if (["Older Brother", "Younger Brother", "Cousin", "Uncle"].includes(role)) {
-      if (tone === "red") return "player-brother-red.jpg";
-      if (tone === "dark") return "player-brother-dark.jpg";
-      if (tone === "medium") return "player-brother-brown.jpg";
-      return "player-brother.jpg";
+      if (tone === "red") return "player-brother-red.png";
+      if (tone === "dark") return "player-brother-dark.png";
+      if (tone === "medium") return "player-brother-brown.png";
+      return "player-brother.png";
     }
     if (["Older Sister", "Aunt"].includes(role)) {
-      if (tone === "red") return "player-sister-red.jpg";
-      if (tone === "dark") return "player-sister-dark.jpg";
-      if (tone === "light") return "player-sister-blond.jpg";
-      return "player-sister.jpg";
+      if (tone === "red") return "player-sister-red.png";
+      if (tone === "dark") return "player-sister-dark.png";
+      if (tone === "light") return "player-sister-blond.png";
+      return "player-sister.png";
     }
-    if (tone === "dark") return "player-brother-dark.jpg";
-    if (tone === "red") return "player-brother-red.jpg";
-    if (tone === "light") return "player-brother.jpg";
-    return "player-brother-brown.jpg";
+    if (tone === "dark") return "player-brother-dark.png";
+    if (tone === "red") return "player-brother-red.png";
+    if (tone === "light") return "player-brother.png";
+    return "player-brother-brown.png";
   }
 
   function ensurePlayerSprite() {
@@ -1818,6 +1949,8 @@
     drive.dist = 0;
     drive.timeLeft = state.difficulty === "hard" ? 60 : (state.difficulty === "easy" ? 10 : 20);
     drive.duration = drive.timeLeft;
+    drive.maxHits = state.difficulty === "hard" ? 1 : (state.difficulty === "easy" ? 3 : 2);
+    drive.hits = 0;
     drive.obstacles = [];
     drive.cops = [];
     drive.roadOffset = 0;
@@ -1919,12 +2052,21 @@
       if (o.hit) return;
       if (o.lane === drive.lane && o.y > 0.72 && o.y < 0.92) {
         o.hit = true;
+        drive.hits++;
         change("morale", -4);
         change("gas", -2);
-        toast("Hit something!");
+        toast("Hit! (" + drive.hits + "/" + drive.maxHits + ")");
         drive.speed *= 0.5;
-        if (state.difficulty !== "easy" && Math.random() > 0.85) {
-          change("heat", 3);
+        if (drive.hits >= drive.maxHits) {
+          stopDrive();
+          change("morale", -8, "Too many crashes. Drive failed.");
+          change("gas", -5);
+          show("hub");
+          log("Failed the drive after " + drive.hits + " hits.");
+          say("Crash Out", "You pull over. The family is rattled. Try the drive again from the map.", [
+            { label: "Back to camper", fn: () => {} }
+          ]);
+          return;
         }
       }
     });
@@ -1948,22 +2090,35 @@
 
     drive.timeLeft = Math.max(0, drive.timeLeft - dt);
     $("#drive-speed").textContent = "Speed " + Math.round(drive.speed);
-    $("#drive-dist").textContent = Math.ceil(drive.timeLeft) + "s left";
+    $("#drive-dist").textContent = Math.ceil(drive.timeLeft) + "s · hits " + drive.hits + "/" + drive.maxHits;
     $("#drive-heat").textContent = "🚨 " + state.resources.heat;
 
     if (drive.timeLeft <= 0) {
       stopDrive();
       change("gas", state.difficulty === "hard" ? -18 : -10);
       change("morale", 6, "Made it through the highway stretch.");
-      state.statesVisited++;
-      state.flags.visitedTwin = true;
-      show("hub");
-      log("Cleared Twin Lakes Highway.");
-      say("Twin Lakes", "You pull off at a scenic overlook. The family piles out for photos.", [
-        { label: "Explore the overlook", fn: () => enterTwinLakes() },
-        { label: "Cause trouble", fn: () => offerTrouble("Overlook") },
-        { label: "Back to camper", fn: () => {} }
-      ]);
+      if (state.pendingState) {
+        state.currentState = state.pendingState;
+        if (!state.unlockedStates.includes(state.pendingState)) {
+          state.unlockedStates.push(state.pendingState);
+          state.statesVisited++;
+        }
+        const name = STATE_INFO[state.pendingState]?.name || state.pendingState;
+        log("Arrived in " + name + "!");
+        state.pendingState = null;
+        show("hub");
+        say("Welcome", "You made it to " + name + ". Check the map for places to explore.", [
+          { label: "Open map", fn: () => showMap() },
+          { label: "Stay in camper", fn: () => {} }
+        ]);
+      } else {
+        state.flags.visitedTwin = true;
+        show("hub");
+        log("Cleared the highway run.");
+        say("Road Clear", "You finish the stretch in one piece.", [
+          { label: "OK", fn: () => {} }
+        ]);
+      }
     }
   }
 
@@ -2038,21 +2193,29 @@
       $("#family-size").value = "4";
       buildFamilySetupUI();
       buildFamily();
-      state.difficulty = ($("#difficulty") && $("#difficulty").value) || "medium";
+      const d = $("#difficulty") && $("#difficulty").value;
+      if (!d) { alert("Choose a difficulty first."); return; }
+      state.difficulty = d;
       if (state.difficulty === "easy") {
         state.resources = { gas: 100, food: 80, money: 150, morale: 85, heat: 0 };
+      } else if (state.difficulty === "hard") {
+        state.resources = { gas: 55, food: 40, money: 70, morale: 55, heat: 0 };
       }
       show("hub");
-      log("Skipped setup. Random family. Day 1.");
+      log("Skipped setup. Random family. Day 1. (" + d + ")");
     };
 
     $("#btn-family-done").onclick = () => {
       try {
+        const diffEl = $("#difficulty");
+        if (!diffEl || !diffEl.value) {
+          alert("Choose a difficulty before you hit the road.");
+          return;
+        }
         buildFamily();
         state.playerOutfit = ($("#player-outfit") && $("#player-outfit").value) || "casual";
         state.familyName = ($("#family-name") && $("#family-name").value) || "";
-        const diffEl = $("#difficulty");
-        state.difficulty = diffEl ? diffEl.value : "medium";
+        state.difficulty = diffEl.value;
         if (state.difficulty === "easy") {
           state.resources.food = 80;
           state.resources.money = 150;
@@ -2112,30 +2275,10 @@
 
     $("#btn-talk-family").onclick = talkFamily;
     $("#btn-weapons").onclick = openInv;
-    $("#btn-depart").onclick = () => show("map");
+    $("#btn-depart").onclick = () => showMap();
     $("#btn-map-back").onclick = () => show("hub");
 
-    $$(".dest").forEach(btn => {
-      btn.onclick = () => {
-        const dest = btn.dataset.dest;
-        change("gas", -8);
-        change("food", -3 - Math.floor(state.familySize / 3));
-        if (Math.random() > 0.35) advanceDay("Miles go by.");
-
-        if (dest === "highway") {
-          change("gas", -4);
-          startHighway();
-          log("Merging onto Twin Lakes Highway.");
-          return;
-        }
-        if (dest === "reststop") { enterReststop(); log("Stopped at Rusty's."); }
-        else if (dest === "campground") { enterCampground(); }
-        else if (dest === "diner") { enterDiner(); log("Pulled into the diner."); }
-        else if (dest === "twinlakes") { enterTwinLakes(); log("Twin Lakes overlook."); }
-        else if (dest === "bluegrass") { enterBluegrass(); log("Crossed into the Bluegrass State."); }
-        updateHub();
-      };
-    });
+    // destinations built dynamically in showMap()
 
     $("#btn-leave").onclick = () => {
       const onCamp = $("#scene-bg") && $("#scene-bg").classList.contains("campground");

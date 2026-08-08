@@ -687,3 +687,37 @@ h2 {
 #btn-family-skip {
   order: -1;
 }
+
+.usa-map {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 520px;
+  margin: 8px auto 16px;
+}
+.state-btn {
+  min-width: 120px;
+  background: #3d5a4c !important;
+}
+.state-btn.current-state {
+  background: #c47b2b !important;
+  box-shadow: 0 0 0 2px #f5e6c8;
+}
+.state-btn:not(.unlocked) {
+  opacity: 0.85;
+}
+.player-sprite {
+  background: transparent !important;
+  mix-blend-mode: normal;
+  image-rendering: auto;
+}
+#local-places {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 480px;
+}
+#local-places.hidden { display: none; }
+.usa-map.hidden { display: none; }

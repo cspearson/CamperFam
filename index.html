@@ -80,11 +80,12 @@
             <option value="6">6</option>
           </select>
         </label>
-        <label>Difficulty:
-          <select id="difficulty">
-            <option value="easy">Easy — you can't lose</option>
-            <option value="medium" selected>Medium — jail, breakdowns, can fail</option>
-            <option value="hard">Hard — tight resources, easy to fail</option>
+        <label>Difficulty: <span style="color:#e74c3c">* required</span>
+          <select id="difficulty" required>
+            <option value="" selected disabled>Choose difficulty…</option>
+            <option value="easy">Easy — can't lose · 3 hits allowed</option>
+            <option value="medium">Medium — can fail · 2 hits allowed</option>
+            <option value="hard">Hard — tough · 1 hit fails the drive</option>
           </select>
         </label>
         <div id="family-members-setup"></div>
@@ -130,16 +131,11 @@
     </section>
 
     <section id="screen-map" class="screen">
-      <div class="day-banner">Day <span id="map-day">1</span></div>
-      <h2>Where to next?</h2>
-      <div class="destinations">
-        <button class="btn dest" data-dest="reststop">Rusty's Roadside Rest Stop</button>
-        <button class="btn dest" data-dest="campground">Shady Pines Campground</button>
-        <button class="btn dest" data-dest="diner">Neon Diner & Gift Shop</button>
-        <button class="btn dest primary" data-dest="highway">Drive: Twin Lakes Highway</button>
-        <button class="btn dest" data-dest="twinlakes">Twin Lakes Overlook</button>
-        <button class="btn dest" data-dest="bluegrass">Bluegrass State Welcome Center</button>
-      </div>
+      <div class="day-banner">Day <span id="map-day">1</span> · <span id="map-state-label">Tennessee</span></div>
+      <h2 id="map-heading">USA Road Map</h2>
+      <p class="hint" id="map-hint">Pick a state to drive there. Explore places once you arrive.</p>
+      <div id="usa-map" class="usa-map"></div>
+      <div id="local-places" class="destinations hidden"></div>
       <button id="btn-map-back" class="btn secondary">Back to Camper</button>
     </section>
 
