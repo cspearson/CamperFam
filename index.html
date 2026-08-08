@@ -14,8 +14,7 @@
     <section id="screen-title" class="screen active">
       <div class="title-content">
         <h1>Camper Quest</h1>
-        <p class="subtitle">A Claymation Family Road Trip</p>
-        <p class="tagline">Talk your way across America</p>
+        <img src="camper.png" alt="Claymation Camper" class="title-camper">
         <button id="btn-start" class="btn primary">Start Road Trip</button>
       </div>
     </section>
@@ -41,13 +40,14 @@
             <option value="6">6 (more chaos)</option>
           </select>
         </label>
-        <p class="hint">Bigger families drain resources faster and create more arguments.</p>
+        <p class="hint">Bigger families use more food and create more arguments.</p>
       </div>
       <button id="btn-family-done" class="btn primary">Hit the Road</button>
     </section>
 
     <!-- HUB -->
     <section id="screen-hub" class="screen">
+      <div class="day-banner">Day <span id="day-num">1</span> • <span id="day-label">Leaving Home</span></div>
       <h2>The Camper</h2>
       <div id="resources" class="resources">
         <div class="res"><span>⛽</span><b id="res-gas">80</b></div>
@@ -61,6 +61,7 @@
         <button id="btn-rest" class="btn">Rest</button>
         <button id="btn-eat" class="btn">Eat</button>
         <button id="btn-talk-family" class="btn">Talk to Family</button>
+        <button id="btn-weapons" class="btn">Check Gear</button>
         <button id="btn-depart" class="btn primary">Look at Map</button>
       </div>
       <div id="hub-log" class="log"></div>
@@ -68,10 +69,12 @@
 
     <!-- MAP -->
     <section id="screen-map" class="screen">
+      <div class="day-banner">Day <span id="map-day">1</span></div>
       <h2>Where to next?</h2>
       <div class="destinations">
         <button class="btn dest" data-dest="reststop">Rusty's Roadside Rest Stop</button>
         <button class="btn dest" data-dest="campground">Shady Pines Campground</button>
+        <button class="btn dest" data-dest="diner">Neon Diner & Gift Shop</button>
       </div>
       <button id="btn-map-back" class="btn secondary">Back to Camper</button>
     </section>
@@ -83,13 +86,15 @@
         <div id="hotspots"></div>
         <div id="scene-ui">
           <div id="scene-title"></div>
-          <button id="btn-inventory" class="icon-btn">🎒</button>
-          <button id="btn-leave" class="icon-btn">🚐</button>
+          <div class="scene-right">
+            <button id="btn-inventory" class="icon-btn">🎒</button>
+            <button id="btn-leave" class="icon-btn">🚐</button>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- DIALOGUE OVERLAY -->
+    <!-- DIALOGUE -->
     <div id="dialogue" class="overlay hidden">
       <div class="dialogue-panel">
         <div id="dlg-speaker"></div>
@@ -98,16 +103,16 @@
       </div>
     </div>
 
-    <!-- INVENTORY OVERLAY -->
+    <!-- INVENTORY / GEAR -->
     <div id="inventory" class="overlay hidden">
       <div class="inv-panel">
-        <h3>Inventory</h3>
+        <h3>Gear & Inventory</h3>
         <div id="inv-list"></div>
         <button id="btn-close-inv" class="btn secondary">Close</button>
       </div>
     </div>
 
-    <!-- MESSAGE TOAST -->
+    <!-- TOAST -->
     <div id="toast" class="toast hidden"></div>
 
   </div>
