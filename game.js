@@ -159,11 +159,7 @@
       box.innerHTML = "";
       state.family.forEach(f => {
         const img = document.createElement("img");
-        let src;
-        if (f.isPlayer) src = getPlayerSpriteSrc();
-        else if (f.role === "Dad" || f.name === "Dad") src = "portrait-dad.jpg";
-        else if (f.role === "Mom" || f.name === "Mom") src = "portrait-mom.jpg";
-        else src = "player-brother.jpg";
+        const src = getFamilyMemberSprite(f);
         img.src = src;
         img.alt = f.name || f.role;
         const label = (f.isPlayer ? "You (" + f.role + ")" : f.name) + " – " + (personalities[f.personality]?.label || f.personality || "");
@@ -278,11 +274,55 @@
 
   
   function getPlayerSpriteSrc() {
-    const role = state.playerRole;
-    if (role === "Dad") return "player-dad.jpg";
-    if (role === "Mom") return "player-mom.jpg";
-    if (role === "Older Brother" || role === "Younger Sibling") return "player-brother.jpg";
+    const role = state.playerRole || "Older Sister";
+    const hair = state.playerHair || "brown";
+    const skin = state.playerSkin || "medium";
+    // Family resemblance: pick closest variant by role + skin/hair
+    if (role === "Dad") {
+      if (skin === "light" || hair === "blond") return "player-dad-light.jpg";
+      return "player-dad.jpg";
+    }
+    if (role === "Mom") {
+      if (skin === "medium" || skin === "tan" || skin === "dark") return "player-mom-medium.jpg";
+      return "player-mom.jpg";
+    }
+    if (role === "Older Brother" || role === "Younger Sibling") {
+      if (skin === "dark" || hair === "black") return "player-brother-dark.jpg";
+      if (hair === "brown" || skin === "medium" || skin === "tan") return "player-brother-brown.jpg";
+      return "player-brother.jpg"; // blond/light default
+    }
+    // Sister / default female teen
+    if (skin === "dark" || hair === "black") return "player-sister-dark.jpg";
+    if (hair === "blond" || skin === "light") return "player-sister-blond.jpg";
     return "player-sister.jpg";
+  }
+
+  function getFamilyMemberSprite(member) {
+    if (!member || member.isPlayer) return getPlayerSpriteSrc();
+    const role = member.role || member.name || "";
+    const skin = state.playerSkin || "medium";
+    const hair = state.playerHair || "brown";
+    // Keep family looking related to the player
+    if (role === "Dad") {
+      if (skin === "light" || hair === "blond") return "player-dad-light.jpg";
+      return "player-dad.jpg";
+    }
+    if (role === "Mom") {
+      if (skin === "medium" || skin === "tan" || skin === "dark") return "player-mom-medium.jpg";
+      return "player-mom.jpg";
+    }
+    if (role === "Little Sister") return "player-littlesis.jpg";
+    if (role === "Older Brother" || role === "Younger Brother" || role === "Cousin" || role === "Uncle") {
+      if (skin === "dark" || hair === "black") return "player-brother-dark.jpg";
+      if (hair === "brown" || skin === "medium") return "player-brother-brown.jpg";
+      return "player-brother.jpg";
+    }
+    if (role === "Older Sister" || role === "Aunt") {
+      if (skin === "dark" || hair === "black") return "player-sister-dark.jpg";
+      if (hair === "blond" || skin === "light") return "player-sister-blond.jpg";
+      return "player-sister.jpg";
+    }
+    return "player-brother-brown.jpg";
   }
 
   function ensurePlayerSprite() {
@@ -688,12 +728,16 @@
     clearSprites();
     $("#scene-bg").className = "campground";
     $("#scene-title").textContent = "Shady Pines Campground";
+    // Use rival-family figure as a stand-in "shady" silhouette until dedicated art
+    if (!state.flags.shadyDealt) {
+      addSprite("char-shady.jpg", "shady");
+    }
     const hs = $("#hotspots");
     hs.innerHTML = "";
     const spots = [
       { label: "Your Camper", style: "left:55%;bottom:12%;width:28%;height:36%;", important: true, action: campCamper, x: 62 },
       { label: "Campfire", style: "left:22%;bottom:18%;width:22%;height:24%;", action: campFire, x: 28 },
-      { label: "Shady Guy", style: "left:8%;bottom:14%;width:18%;height:34%;", important: true, action: campShady, x: 14 },
+      { label: "Shady Guy", style: "left:8%;bottom:14%;width:20%;height:38%;", important: true, action: campShady, x: 14 },
       { label: "Trees", style: "left:78%;bottom:20%;width:18%;height:40%;", action: campTrees, x: 80 },
       { label: "Path", style: "left:40%;bottom:4%;width:20%;height:14%;", action: campPath, x: 45 }
     ];
@@ -877,20 +921,30 @@
     addSprite("char-waitress.jpg", "waitress");
     const hs = $("#hotspots");
     hs.innerHTML = "";
-    [
-      { label: "Waitress", style: "left:8%;bottom:6%;width:32%;height:50%;", important: true, action: talkWaitress },
-      { label: "Gift Shelf", style: "left:58%;bottom:20%;width:24%;height:26%;", action: examineGifts },
-      { label: "Jukebox", style: "left:6%;top:42%;width:18%;height:20%;", action: examineJukebox },
-      { label: "Guy at Counter", style: "left:42%;bottom:18%;width:20%;height:24%;", action: talkCounter }
-    ].forEach(h => {
+    const spots = [
+      { label: "Waitress", style: "left:8%;bottom:6%;width:32%;height:50%;", important: true, action: talkWaitress, x: 16 },
+      { label: "Gift Shelf", style: "left:58%;bottom:20%;width:24%;height:26%;", action: examineGifts, x: 65 },
+      { label: "Jukebox", style: "left:6%;top:42%;width:18%;height:20%;", action: examineJukebox, x: 12 },
+      { label: "Guy at Counter", style: "left:42%;bottom:18%;width:22%;height:28%;", important: true, action: talkCounter, x: 48 }
+    ];
+    spots.forEach(h => {
       const el = document.createElement("div");
       el.className = "hotspot" + (h.important ? " important" : "");
       el.style.cssText = h.style;
       el.textContent = h.label;
-      el.onclick = h.action;
+      el.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (state.playerMoving) return;
+        if (Math.abs(state.playerX - h.x) < 14) h.action();
+        else walkThen(h.action, h.x);
+      };
       hs.appendChild(el);
     });
     show("scene");
+    state.playerX = 30;
+    ensureWalkLayer();
+    ensurePlayerSprite();
   }
 
   function talkWaitress() {
@@ -956,11 +1010,33 @@
   }
 
   function talkCounter() {
+    if (state.resources.heat >= 15 || state.flags.coolerTaken) {
+      say("Guy at Counter", "You match a description I heard. Painted camper. Family. Someone's been asking around.", [
+        { label: "Who's been asking?", fn: () => {
+          say("Guy at Counter", "Didn't catch a name. Thin guy, kept his hood up. Said he might stop by Shady Pines.", [
+            { label: "Great.", fn: () => change("morale", -3) }
+          ]);
+        }},
+        { label: "You've got the wrong people", fn: () => {
+          change("heat", 3);
+          toast("He doesn't look convinced.");
+        }},
+        { label: "Finish your coffee and leave us alone", fn: () => {
+          change("morale", -2);
+          change("heat", 2);
+        }}
+      ]);
+      return;
+    }
     say("Guy at Counter", "You folks with the big painted camper? Saw a ranger asking about a cooler earlier.", [
       { label: "Thanks for the heads-up", fn: () => change("morale", 2) },
       { label: "We don't know anything about that", fn: () => {
-        if (state.flags.coolerTaken) change("heat", 2);
         toast("He just nods and goes back to his coffee.");
+      }},
+      { label: "You hear a lot for someone drinking alone", fn: () => {
+        say("Guy at Counter", "People talk. I listen. That's all.", [
+          { label: "Fair enough", fn: () => {} }
+        ]);
       }}
     ]);
   }
@@ -969,7 +1045,22 @@
   function talkFamily() {
     const playerP = state.playerPersonality;
     const others = state.family.filter(f => !f.isPlayer);
-    const someone = others[Math.floor(Math.random() * others.length)] || { name: "Someone", personality: "quiet" };
+    if (!others.length) {
+      say("You", "It's quiet. Too quiet.", [{ label: "…", fn: () => {} }]);
+      return;
+    }
+
+    // Never pick the player's own role as speaker
+    const pickOther = (preferredRoles) => {
+      const match = others.filter(f => preferredRoles.includes(f.role) || preferredRoles.includes(f.name));
+      if (match.length) return match[Math.floor(Math.random() * match.length)];
+      return others[Math.floor(Math.random() * others.length)];
+    };
+
+    const someone = others[Math.floor(Math.random() * others.length)];
+    const mapPerson = pickOther(["Dad", "Mom", "Older Sister", "Older Brother"]);
+    const snackPerson = pickOther(["Mom", "Dad", "Older Sister"]);
+    const musicPerson = pickOther(["Younger Brother", "Little Sister", "Older Brother", "Older Sister", "Cousin"]);
 
     const scenes = [
       {
@@ -990,7 +1081,7 @@
         ]
       },
       {
-        speaker: "Dad",
+        speaker: mapPerson.name,
         text: "I think if we take the next exit we can cut twenty minutes off. The map says so.",
         choices: [
           { label: "Let's try it", fn: () => {
@@ -1005,20 +1096,20 @@
           { label: "Argue about the map", fn: () => {
             change("morale", -6);
             state.flags.familyTension += 1;
-            toast("Map argument achieved.");
+            toast("Map argument. Great.");
           }}
         ]
       },
       {
-        speaker: "Mom",
-        text: "Has anyone seen the good snacks? The ones I specifically said to save?",
+        speaker: snackPerson.name,
+        text: "Has anyone seen the good snacks? The ones we were supposed to save?",
         choices: [
           { label: "I think someone already ate them", fn: () => {
             change("morale", -4);
             state.flags.familyTension += 1;
           }},
           { label: "They're still in the back", fn: () => change("morale", 2) },
-          { label: "Blame the youngest", fn: () => {
+          { label: "Blame somebody else", fn: () => {
             change("morale", -5);
             toast("Now two people are upset.");
           }}
@@ -1037,20 +1128,19 @@
         ]
       },
       {
-        speaker: "Younger Brother",
+        speaker: musicPerson.name,
         text: "If I have to listen to that same playlist one more time I'm walking the rest of the way.",
         choices: [
           { label: "Change the music", fn: () => change("morale", 5) },
-          { label: "It's my car, my rules", fn: () => {
+          { label: "My trip, my rules", fn: () => {
             change("morale", -6);
             state.flags.familyTension += 1;
           }},
-          { label: "Let him pick the next three songs", fn: () => change("morale", 6, "Bribery works.") }
+          { label: "Let them pick the next three songs", fn: () => change("morale", 6, "Bribery works.") }
         ]
       }
     ];
 
-    // personality-flavored player options sometimes
     if (playerP === "troublemaker" && Math.random() > 0.6) {
       scenes.push({
         speaker: "You",
@@ -1059,7 +1149,7 @@
           { label: "Start a harmless argument on purpose", fn: () => {
             change("morale", -3);
             state.flags.familyTension += 1;
-            toast("You poked the bear. It's awake now.");
+            toast("You poked the bear.");
           }},
           { label: "Suggest using the Bubble Blaster later", fn: () => change("morale", 4) },
           { label: "Leave it alone", fn: () => {} }
@@ -1129,9 +1219,17 @@
     });
 
     $("#btn-leave").onclick = () => {
+      const onCamp = $("#scene-bg") && $("#scene-bg").classList.contains("campground");
       clearSprites();
+      if (onCamp && !state.flags.shadyDealt && !state.flags.campLockFixed && Math.random() > 0.45) {
+        change("food", -7);
+        change("morale", -8, "Something got into the storage overnight.");
+        log("Lost food at the campground.");
+        state.flags.shadyDealt = true;
+      } else {
+        log("Back at the camper.");
+      }
       show("hub");
-      log("Back at the camper.");
     };
 
     $("#btn-inventory").onclick = openInv;
