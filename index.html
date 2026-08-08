@@ -37,6 +37,9 @@
             <option value="troublemaker">Troublemaker</option>
             <option value="anxious">Anxious</option>
             <option value="optimistic">Optimistic</option>
+            <option value="grumpy">Grumpy</option>
+            <option value="quiet">Quiet</option>
+            <option value="loud">Loud</option>
           </select>
         </label>
         <label>Hair:
@@ -55,11 +58,17 @@
             <option value="dark">Dark</option>
           </select>
         </label>
-        <label>Build:
-          <select id="player-build">
+        <label>Height:
+          <select id="player-height">
             <option value="average">Average</option>
             <option value="tall">Tall</option>
             <option value="short">Short</option>
+          </select>
+        </label>
+        <label>Weight:
+          <select id="player-weight">
+            <option value="average">Average</option>
+            <option value="slim">Slim</option>
             <option value="stocky">Stocky</option>
           </select>
         </label>
@@ -72,9 +81,11 @@
           </select>
         </label>
         <div id="family-members-setup"></div>
-        <p class="hint">Personalities change dialogue. Appearance is saved for your character on screen.</p>
+        <p class="hint">Same personality options for everyone. Appearance is saved for your character.</p>
       </div>
-      <button id="btn-family-done" class="btn primary">Hit the Road</button>
+      <div class="family-footer">
+        <button id="btn-family-done" class="btn primary">Hit the Road</button>
+      </div>
     </section>
 
     <section id="screen-hub" class="screen">

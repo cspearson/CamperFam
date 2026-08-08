@@ -8,7 +8,8 @@
     playerPersonality: "sarcastic",
     playerHair: "brown",
     playerSkin: "medium",
-    playerBuild: "average",
+    playerHeight: "average",
+    playerWeight: "average",
     familySize: 4,
     playerX: 18, // percent across scene
     playerMoving: false,
@@ -86,12 +87,14 @@
       div.innerHTML = `
         <label style="font-size:0.9rem">${role} personality:
           <select class="member-personality" data-role="${role}">
-            <option value="grumpy">Grumpy</option>
+            <option value="sarcastic">Sarcastic</option>
+            <option value="peacemaker">Peacemaker</option>
+            <option value="troublemaker">Troublemaker</option>
+            <option value="anxious">Anxious</option>
             <option value="optimistic">Optimistic</option>
+            <option value="grumpy">Grumpy</option>
             <option value="quiet">Quiet</option>
             <option value="loud">Loud</option>
-            <option value="troublemaker">Troublemaker</option>
-            <option value="peacemaker">Peacemaker</option>
           </select>
         </label>`;
       container.appendChild(div);
@@ -103,7 +106,8 @@
     state.playerPersonality = $("#player-personality").value;
     state.playerHair = $("#player-hair").value;
     state.playerSkin = $("#player-skin").value;
-    state.playerBuild = $("#player-build").value;
+    state.playerHeight = $("#player-height").value;
+    state.playerWeight = $("#player-weight").value;
     state.familySize = parseInt($("#family-size").value, 10);
     state.family = [{
       name: "You",
@@ -138,25 +142,27 @@
     $("#family-line").textContent = names.join(" · ");
 
     // portraits
-    let box = document.getElementById("family-portraits");
-    if (!box) {
-      box = document.createElement("div");
-      box.id = "family-portraits";
-      box.className = "family-portraits";
-      const line = $("#family-line");
-      if (line && line.parentNode) line.parentNode.insertBefore(box, line);
-    }
-    box.innerHTML = "";
-    state.family.forEach(f => {
-      const img = document.createElement("img");
-      if (f.isPlayer) img.src = getPlayerSpriteSrc();
-      else if (f.role === "Dad" || f.name === "Dad") img.src = "portrait-dad.jpg";
-      else if (f.role === "Mom" || f.name === "Mom") img.src = "portrait-mom.jpg";
-      else img.src = getPlayerSpriteSrc(); // fallback
-      img.alt = f.name || f.role;
-      img.title = (f.isPlayer ? "You" : f.name) + " – " + (personalities[f.personality]?.label || "");
-      box.appendChild(img);
-    });
+    try {
+      let box = document.getElementById("family-portraits");
+      if (!box) {
+        box = document.createElement("div");
+        box.id = "family-portraits";
+        box.className = "family-portraits";
+        const line = $("#family-line");
+        if (line && line.parentNode) line.parentNode.insertBefore(box, line);
+      }
+      box.innerHTML = "";
+      state.family.forEach(f => {
+        const img = document.createElement("img");
+        if (f.isPlayer) img.src = getPlayerSpriteSrc();
+        else if (f.role === "Dad" || f.name === "Dad") img.src = "portrait-dad.jpg";
+        else if (f.role === "Mom" || f.name === "Mom") img.src = "portrait-mom.jpg";
+        else img.src = "player-brother.jpg";
+        img.alt = f.name || f.role;
+        img.title = (f.isPlayer ? "You" : f.name) + " – " + (personalities[f.personality]?.label || "");
+        box.appendChild(img);
+      });
+    } catch (e) { console.warn("portraits", e); }
   }
 
   function log(msg) {
@@ -267,10 +273,11 @@
       $("#scene-stage").appendChild(p);
     }
     p.src = getPlayerSpriteSrc();
-    p.classList.remove("tall", "short", "stocky");
-    if (state.playerBuild === "tall") p.classList.add("tall");
-    if (state.playerBuild === "short") p.classList.add("short");
-    if (state.playerBuild === "stocky") p.classList.add("stocky");
+    p.classList.remove("tall", "short", "stocky", "slim");
+    if (state.playerHeight === "tall") p.classList.add("tall");
+    if (state.playerHeight === "short") p.classList.add("short");
+    if (state.playerWeight === "stocky") p.classList.add("stocky");
+    if (state.playerWeight === "slim") p.classList.add("slim");
     p.style.left = state.playerX + "%";
     return p;
   }
@@ -896,13 +903,18 @@
     $("#btn-start").onclick = () => show("family");
 
     $("#btn-family-done").onclick = () => {
-      buildFamily();
-      if (state.familySize >= 5) {
-        state.resources.food = 48;
-        state.resources.money = 95;
+      try {
+        buildFamily();
+        if (state.familySize >= 5) {
+          state.resources.food = 48;
+          state.resources.money = 95;
+        }
+        show("hub");
+        log("Everyone's in. Day 1.");
+      } catch (err) {
+        console.error(err);
+        alert("Something went wrong starting the trip. Try again.");
       }
-      show("hub");
-      log("Everyone's in. Day 1.");
     };
 
     $("#btn-rest").onclick = () => {
