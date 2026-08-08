@@ -378,3 +378,52 @@ h2 {
 }
 
 .toast.hidden { display: none; }
+
+/* Player character in scene (Monkey Island style) */
+.player-sprite {
+  position: absolute;
+  bottom: 6%;
+  height: 38%;
+  max-width: 22%;
+  object-fit: contain;
+  z-index: 5;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 5px rgba(0,0,0,0.4));
+  transition: left 0.05s linear;
+  transform-origin: bottom center;
+}
+.player-sprite.flipped {
+  transform: scaleX(-1);
+}
+.player-sprite.tall { height: 44%; }
+.player-sprite.short { height: 32%; }
+.player-sprite.stocky { height: 36%; max-width: 26%; }
+
+/* Walkable ground click area */
+.walk-layer {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 0;
+  height: 45%;
+  z-index: 4;
+  cursor: pointer;
+}
+
+/* Family portraits in hub */
+.family-portraits {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 8px 0 12px;
+  width: 100%;
+  max-width: 360px;
+}
+.family-portraits img {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e67e22;
+  background: #2a1c12;
+}

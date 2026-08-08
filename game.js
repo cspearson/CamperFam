@@ -6,7 +6,14 @@
     dayLabel: "Leaving Home",
     playerRole: "Older Sister",
     playerPersonality: "sarcastic",
+    playerHair: "brown",
+    playerSkin: "medium",
+    playerBuild: "average",
     familySize: 4,
+    playerX: 18, // percent across scene
+    playerMoving: false,
+    playerTargetX: 18,
+    pendingAction: null,
     family: [],
     resources: { gas: 80, food: 55, money: 110, morale: 70, heat: 0 },
     inventory: [
@@ -94,6 +101,9 @@
   function buildFamily() {
     state.playerRole = $("#player-role").value;
     state.playerPersonality = $("#player-personality").value;
+    state.playerHair = $("#player-hair").value;
+    state.playerSkin = $("#player-skin").value;
+    state.playerBuild = $("#player-build").value;
     state.familySize = parseInt($("#family-size").value, 10);
     state.family = [{
       name: "You",
@@ -126,6 +136,27 @@
     $("#res-heat").textContent = state.resources.heat;
     const names = state.family.map(f => f.isPlayer ? `You (${f.role})` : `${f.name} (${personalities[f.personality]?.label || f.personality})`);
     $("#family-line").textContent = names.join(" · ");
+
+    // portraits
+    let box = document.getElementById("family-portraits");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "family-portraits";
+      box.className = "family-portraits";
+      const line = $("#family-line");
+      if (line && line.parentNode) line.parentNode.insertBefore(box, line);
+    }
+    box.innerHTML = "";
+    state.family.forEach(f => {
+      const img = document.createElement("img");
+      if (f.isPlayer) img.src = getPlayerSpriteSrc();
+      else if (f.role === "Dad" || f.name === "Dad") img.src = "portrait-dad.jpg";
+      else if (f.role === "Mom" || f.name === "Mom") img.src = "portrait-mom.jpg";
+      else img.src = getPlayerSpriteSrc(); // fallback
+      img.alt = f.name || f.role;
+      img.title = (f.isPlayer ? "You" : f.name) + " – " + (personalities[f.personality]?.label || "");
+      box.appendChild(img);
+    });
   }
 
   function log(msg) {
@@ -218,6 +249,97 @@
     $("#scene-stage").appendChild(img);
   }
 
+  
+  function getPlayerSpriteSrc() {
+    const role = state.playerRole;
+    if (role === "Dad") return "player-dad.jpg";
+    if (role === "Mom") return "player-mom.jpg";
+    if (role === "Older Brother" || role === "Younger Sibling") return "player-brother.jpg";
+    return "player-sister.jpg";
+  }
+
+  function ensurePlayerSprite() {
+    let p = document.getElementById("player-sprite");
+    if (!p) {
+      p = document.createElement("img");
+      p.id = "player-sprite";
+      p.className = "player-sprite";
+      $("#scene-stage").appendChild(p);
+    }
+    p.src = getPlayerSpriteSrc();
+    p.classList.remove("tall", "short", "stocky");
+    if (state.playerBuild === "tall") p.classList.add("tall");
+    if (state.playerBuild === "short") p.classList.add("short");
+    if (state.playerBuild === "stocky") p.classList.add("stocky");
+    p.style.left = state.playerX + "%";
+    return p;
+  }
+
+  function ensureWalkLayer() {
+    let w = document.getElementById("walk-layer");
+    if (!w) {
+      w = document.createElement("div");
+      w.id = "walk-layer";
+      w.className = "walk-layer";
+      $("#scene-stage").appendChild(w);
+      w.addEventListener("click", onWalkClick);
+    }
+    return w;
+  }
+
+  function onWalkClick(e) {
+    if (state.playerMoving) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    // clamp so character stays on screen
+    const target = Math.max(8, Math.min(88, xPct));
+    movePlayerTo(target, null);
+  }
+
+  function movePlayerTo(targetX, onArrive) {
+    const p = ensurePlayerSprite();
+    state.playerTargetX = targetX;
+    state.playerMoving = true;
+    state.pendingAction = onArrive || null;
+
+    // face direction
+    if (targetX > state.playerX) p.classList.remove("flipped");
+    else p.classList.add("flipped");
+
+    const start = state.playerX;
+    const dist = Math.abs(targetX - start);
+    const duration = Math.max(300, dist * 28); // ms
+    const t0 = performance.now();
+
+    function step(now) {
+      const t = Math.min(1, (now - t0) / duration);
+      // ease
+      const ease = t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
+      state.playerX = start + (targetX - start) * ease;
+      p.style.left = state.playerX + "%";
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else {
+        state.playerMoving = false;
+        state.playerX = targetX;
+        p.style.left = targetX + "%";
+        if (state.pendingAction) {
+          const fn = state.pendingAction;
+          state.pendingAction = null;
+          fn();
+        }
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function walkThen(actionFn, hotspotLeftPct) {
+    // walk near the hotspot then run the action
+    const target = Math.max(10, Math.min(85, hotspotLeftPct + 6));
+    movePlayerTo(target, actionFn);
+  }
+
+
   function enterReststop() {
     clearSprites();
     $("#scene-bg").className = "reststop";
@@ -228,21 +350,29 @@
 
     const hs = $("#hotspots");
     hs.innerHTML = "";
-    [
-      { label: "Rusty", style: "left:4%;bottom:8%;width:28%;height:42%;", important: true, action: talkRusty },
-      { label: "⚠️ Cooler", style: "left:60%;bottom:8%;width:26%;height:30%;", important: true, action: examineCooler },
-      { label: "Other Family", style: "left:34%;bottom:6%;width:30%;height:42%;", action: talkRival },
-      { label: "Vending", style: "left:82%;bottom:28%;width:14%;height:28%;", action: examineVending },
-      { label: "Bench", style: "left:2%;top:52%;width:18%;height:12%;", action: examineBench }
-    ].forEach(h => {
+    const spots = [
+      { label: "Rusty", style: "left:4%;bottom:8%;width:28%;height:42%;", important: true, action: talkRusty, x: 12 },
+      { label: "⚠️ Cooler", style: "left:60%;bottom:8%;width:26%;height:30%;", important: true, action: examineCooler, x: 68 },
+      { label: "Other Family", style: "left:34%;bottom:6%;width:30%;height:42%;", action: talkRival, x: 42 },
+      { label: "Vending", style: "left:82%;bottom:28%;width:14%;height:28%;", action: examineVending, x: 80 },
+      { label: "Bench", style: "left:2%;top:52%;width:18%;height:12%;", action: examineBench, x: 14 }
+    ];
+    spots.forEach(h => {
       const el = document.createElement("div");
       el.className = "hotspot" + (h.important ? " important" : "");
       el.style.cssText = h.style;
       el.textContent = h.label;
-      el.onclick = h.action;
+      el.onclick = (e) => {
+        e.stopPropagation();
+        if (state.playerMoving) return;
+        walkThen(h.action, h.x);
+      };
       hs.appendChild(el);
     });
     show("scene");
+    state.playerX = 18;
+    ensureWalkLayer();
+    ensurePlayerSprite();
     if (!state.flags.visitedRest) {
       state.flags.visitedRest = true;
       state.statesVisited++;
