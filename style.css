@@ -568,20 +568,23 @@ h2 {
   }
 }
 
-/* Walk bob animation */
+/* Walk cycle — step bounce + slight lean */
 .player-sprite.walking {
-  animation: walk-bob 0.28s ease-in-out infinite;
+  animation: walk-step 0.32s steps(2, end) infinite;
+  transform-origin: bottom center;
 }
-@keyframes walk-bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6%); }
+@keyframes walk-step {
+  0% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-10%) rotate(3deg); }
+  100% { transform: translateY(0) rotate(-3deg); }
 }
 .player-sprite.walking.flipped {
-  animation: walk-bob-flip 0.28s ease-in-out infinite;
+  animation: walk-step-flip 0.32s steps(2, end) infinite;
 }
-@keyframes walk-bob-flip {
-  0%, 100% { transform: scaleX(-1) translateY(0); }
-  50% { transform: scaleX(-1) translateY(-6%); }
+@keyframes walk-step-flip {
+  0% { transform: scaleX(-1) translateY(0) rotate(-3deg); }
+  50% { transform: scaleX(-1) translateY(-10%) rotate(3deg); }
+  100% { transform: scaleX(-1) translateY(0) rotate(-3deg); }
 }
 
 /* Driving mini-game */
@@ -651,4 +654,36 @@ h2 {
   top: 8px;
   right: 8px;
   z-index: 6;
+}
+
+#scene-bg.reststop {
+  background-image: url("bg-reststop.jpg");
+  background-size: cover;
+  background-position: center;
+}
+#scene-bg.campground {
+  background-image: url("bg-campground.jpg");
+  background-size: cover;
+  background-position: center;
+}
+#scene-bg.twinlakes {
+  background-image: url("bg-twinlakes.jpg");
+  background-size: cover;
+  background-position: center;
+}
+#scene-bg.highway {
+  background-image: url("bg-highway.jpg");
+  background-size: cover;
+  background-position: center;
+}
+.family-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  width: 100%;
+  margin-top: 12px;
+}
+#btn-family-skip {
+  order: -1;
 }

@@ -54,7 +54,10 @@
       foundMagnet: false,
       foundCap: false,
       foundWire: false,
-      camperExploded: false
+      camperExploded: false,
+      visitedTwin: false,
+      visitedBluegrass: false,
+      foundTwinJunk: false
     },
     statesVisited: 0
   };
@@ -306,15 +309,54 @@
     const list = $("#inv-list");
     list.innerHTML = "";
     state.inventory.forEach(item => {
+      if (!item.qty || item.qty <= 0) return;
       const d = document.createElement("div");
       d.className = "inv-item";
-      d.innerHTML = `<span><b>${item.name}</b>${item.desc ? `<br><small style="opacity:.7">${item.desc}</small>` : ""}</span><span>×${item.qty}</span>`;
+      d.innerHTML = "<b>" + item.name + "</b> ×" + item.qty + (item.desc ? "<br><small>" + item.desc + "</small>" : "");
+      const usable = ["antenna","gum_trap","chicken_decoy","grabber","patch_kit","chicken","snowglobe"].includes(item.id);
+      if (usable) {
+        const b = document.createElement("button");
+        b.textContent = "Use";
+        b.style.marginTop = "6px";
+        b.onclick = () => { closeInv(); useSpecialItem(item.id); };
+        d.appendChild(b);
+      }
       list.appendChild(d);
     });
     $("#inventory").classList.remove("hidden");
   }
 
   function closeInv() { $("#inventory").classList.add("hidden"); }
+
+  function useSpecialItem(id) {
+    if (!hasItem(id)) { toast("Don't have that."); return; }
+    if (id === "antenna") {
+      useItem("antenna");
+      change("morale", 8, "Weird radio chatter, then a useful tip.");
+      if (Math.random() > 0.45) change("heat", -4, "Caught a patrol mention. Heat down a bit.");
+    } else if (id === "gum_trap") {
+      useItem("gum_trap");
+      change("heat", -5);
+      change("morale", 4, "Gum trap set by the camper door.");
+      state.flags.campLockFixed = true;
+    } else if (id === "chicken_decoy") {
+      useItem("chicken_decoy");
+      change("morale", 10, "Chicken decoy deployed. Chaos laughs.");
+      change("heat", -2);
+    } else if (id === "grabber") {
+      useItem("grabber");
+      change("money", 8, "Fished change from a grate. +$8");
+      change("morale", 3);
+    } else if (id === "patch_kit") {
+      toast("Saved for engine emergencies (auto-used on breakdown).");
+    } else if (id === "chicken") {
+      useItem("chicken");
+      change("morale", 5, "Squeaky chicken war.");
+    } else if (id === "snowglobe") {
+      useItem("snowglobe");
+      change("morale", 4, "Tiny blizzard. Tiny calm.");
+    }
+  }
 
   function hasItem(id) {
     const it = state.inventory.find(i => i.id === id);
@@ -1637,6 +1679,112 @@
   }
 
 
+
+  function enterTwinLakes() {
+    if (!state.flags.visitedTwin) { state.flags.visitedTwin = true; state.statesVisited++; }
+    clearSprites();
+    $("#scene-bg").className = "twinlakes";
+    $("#scene-title").textContent = "Twin Lakes Overlook";
+    const hs = $("#hotspots");
+    hs.innerHTML = "";
+    const spots = [
+      { label: "Fence", style: "left:40%;bottom:18%;width:30%;height:22%;", action: () => say("Fence", "Two lakes glitter below. Someone carved initials into the rail.", [
+        { label: "Add yours", fn: () => change("morale", 3, "Tourist ritual complete.") },
+        { label: "Cause trouble", fn: () => offerTrouble("Overlook fence") }
+      ]), x: 50 },
+      { label: "Trail", style: "left:8%;bottom:12%;width:24%;height:28%;", important: true, action: () => {
+        say("Trail", "A short path drops toward the water.", [
+          { label: "Go halfway", fn: () => {
+            if (!state.flags.foundTwinJunk) {
+              state.flags.foundTwinJunk = true;
+              addOrStack({ id: "bottle_cap", name: "Bottle Cap", desc: "Lucky? Probably not.", qty: 1 });
+              toast("Found a bottle cap in the dirt.");
+            }
+            change("morale", 2);
+          }},
+          { label: "Cause trouble", fn: () => offerTrouble("Lakeside trail") }
+        ]);
+      }, x: 16 },
+      { label: "Photo Spot", style: "left:68%;bottom:20%;width:24%;height:26%;", action: () => {
+        say("Photo Spot", "The family argues about who stands in front.", [
+          { label: "Take the picture", fn: () => change("morale", 6, "One decent group photo.") },
+          { label: "Cause trouble", fn: () => offerTrouble("Photo spot") }
+        ]);
+      }, x: 75 }
+    ];
+    spots.forEach(h => {
+      const el = document.createElement("div");
+      el.className = "hotspot" + (h.important ? " important" : "");
+      el.style.cssText = h.style;
+      el.textContent = h.label;
+      el.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (state.playerMoving) return;
+        if (Math.abs(state.playerX - h.x) < 16) h.action();
+        else walkThen(h.action, h.x);
+      };
+      hs.appendChild(el);
+    });
+    show("scene");
+    state.playerX = 50;
+    ensureWalkLayer();
+    ensurePlayerSprite();
+  }
+
+  function enterBluegrass() {
+    if (!state.flags.visitedBluegrass) { state.flags.visitedBluegrass = true; state.statesVisited++; }
+    clearSprites();
+    $("#scene-bg").className = "reststop";
+    $("#scene-title").textContent = "Bluegrass Welcome Center";
+    addSprite("char-rusty.jpg", "rusty");
+    const hs = $("#hotspots");
+    hs.innerHTML = "";
+    const spots = [
+      { label: "Attendant", style: "left:12%;bottom:8%;width:28%;height:48%;", important: true, action: () => {
+        say("Attendant", "Welcome to Kentucky. Maps are free. Coffee is not.", [
+          { label: "Take a map", fn: () => change("morale", 2, "You now own a crumpled state map.") },
+          { label: "Buy coffee ($2)", fn: () => {
+            if (state.resources.money >= 2) { change("money", -2); change("morale", 4); }
+          }},
+          { label: "Cause trouble", fn: () => offerTrouble("Welcome Center") }
+        ]);
+      }, x: 20 },
+      { label: "Brochure Wall", style: "left:55%;bottom:22%;width:26%;height:30%;", action: () => {
+        say("Brochures", "Caves, horses, fried everything.", [
+          { label: "Grab a few", fn: () => change("morale", 1) },
+          { label: "Cause trouble", fn: () => offerTrouble("Brochure wall") }
+        ]);
+      }, x: 62 },
+      { label: "Parking Lot", style: "left:40%;bottom:4%;width:24%;height:14%;", action: () => {
+        say("Lot", "Someone left a cooler unattended by a sedan.", [
+          { label: "Leave it alone", fn: () => {} },
+          { label: "Cause trouble / steal snacks", fn: () => {
+            change("heat", 10);
+            change("food", 6);
+            change("morale", -3, "You shouldn't have. But the chips are good.");
+          }}
+        ]);
+      }, x: 48 }
+    ];
+    spots.forEach(h => {
+      const el = document.createElement("div");
+      el.className = "hotspot" + (h.important ? " important" : "");
+      el.style.cssText = h.style;
+      el.textContent = h.label;
+      el.onclick = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (state.playerMoving) return;
+        if (Math.abs(state.playerX - h.x) < 16) h.action();
+        else walkThen(h.action, h.x);
+      };
+      hs.appendChild(el);
+    });
+    show("scene");
+    state.playerX = 30;
+    ensureWalkLayer();
+    ensurePlayerSprite();
+  }
+
   // ---------- DRIVING MINI-GAME ----------
   const drive = {
     running: false,
@@ -1668,7 +1816,8 @@
     drive.boosting = false;
     drive.braking = false;
     drive.dist = 0;
-    drive.goal = state.difficulty === "hard" ? 16 : 12;
+    drive.timeLeft = state.difficulty === "hard" ? 60 : (state.difficulty === "easy" ? 10 : 20);
+    drive.duration = drive.timeLeft;
     drive.obstacles = [];
     drive.cops = [];
     drive.roadOffset = 0;
@@ -1739,13 +1888,22 @@
 
     // spawn
     drive.lastSpawn += dt;
-    const rate = state.difficulty === "hard" ? 0.7 : 1.1;
+    const rate = state.difficulty === "hard" ? 0.35 : (state.difficulty === "easy" ? 0.9 : 0.55);
     if (drive.lastSpawn > rate) {
       drive.lastSpawn = 0;
-      if (Math.random() > 0.35) {
-        drive.obstacles.push({ lane: Math.floor(Math.random() * 3), y: -0.1, type: Math.random() > 0.7 ? "cone" : "car" });
+      // more obstacles
+      const n = state.difficulty === "hard" ? 2 : 1;
+      for (let i = 0; i < n; i++) {
+        if (Math.random() > 0.25) {
+          const types = ["cone", "car", "debris", "car"];
+          drive.obstacles.push({
+            lane: Math.floor(Math.random() * 3),
+            y: -0.08 - Math.random() * 0.12,
+            type: types[Math.floor(Math.random() * types.length)]
+          });
+        }
       }
-      if (Math.random() > 0.82) {
+      if (Math.random() > 0.7) {
         drive.cops.push({ lane: Math.floor(Math.random() * 3), y: -0.15, seen: false });
       }
     }
@@ -1788,20 +1946,23 @@
       }
     });
 
+    drive.timeLeft = Math.max(0, drive.timeLeft - dt);
     $("#drive-speed").textContent = "Speed " + Math.round(drive.speed);
-    $("#drive-dist").textContent = drive.dist.toFixed(1) + " / " + drive.goal + " mi";
+    $("#drive-dist").textContent = Math.ceil(drive.timeLeft) + "s left";
     $("#drive-heat").textContent = "🚨 " + state.resources.heat;
 
-    if (drive.dist >= drive.goal) {
+    if (drive.timeLeft <= 0) {
       stopDrive();
-      change("gas", -12);
-      change("morale", 6, "Made it to Twin Lakes overlook.");
+      change("gas", state.difficulty === "hard" ? -18 : -10);
+      change("morale", 6, "Made it through the highway stretch.");
       state.statesVisited++;
+      state.flags.visitedTwin = true;
       show("hub");
-      log("Arrived via Twin Lakes Highway.");
+      log("Cleared Twin Lakes Highway.");
       say("Twin Lakes", "You pull off at a scenic overlook. The family piles out for photos.", [
-        { label: "Nice drive", fn: () => {} },
-        { label: "Cause trouble at the overlook", fn: () => offerTrouble("Overlook") }
+        { label: "Explore the overlook", fn: () => enterTwinLakes() },
+        { label: "Cause trouble", fn: () => offerTrouble("Overlook") },
+        { label: "Back to camper", fn: () => {} }
       ]);
     }
   }
@@ -1834,8 +1995,9 @@
     drive.obstacles.forEach(o => {
       const x = roadX + o.lane * laneW + laneW * 0.2;
       const y = o.y * h;
-      ctx.fillStyle = o.type === "cone" ? "#e67e22" : "#2980b9";
-      ctx.fillRect(x, y, laneW * 0.6, h * 0.08);
+      ctx.fillStyle = o.type === "cone" ? "#e67e22" : (o.type === "debris" ? "#7f8c8d" : "#2980b9");
+      const oh = o.type === "cone" ? h * 0.06 : h * 0.09;
+      ctx.fillRect(x, y, laneW * 0.55, oh);
     });
     drive.cops.forEach(c => {
       const x = roadX + c.lane * laneW + laneW * 0.15;
@@ -1862,10 +2024,33 @@
     buildFamilySetupUI();
 
     $("#btn-start").onclick = () => show("family");
+    const skipBtn = $("#btn-family-skip");
+    if (skipBtn) skipBtn.onclick = () => {
+      // random quick start
+      const roles = ["Older Sister","Older Brother","Mom","Dad","Younger Sibling"];
+      const hairs = ["brown","blond","black","red"];
+      const skins = ["light","medium","tan","dark"];
+      const pers = Object.keys(personalities);
+      $("#player-role").value = roles[Math.floor(Math.random()*roles.length)];
+      $("#player-hair").value = hairs[Math.floor(Math.random()*hairs.length)];
+      $("#player-skin").value = skins[Math.floor(Math.random()*skins.length)];
+      $("#player-personality").value = pers[Math.floor(Math.random()*pers.length)];
+      $("#family-size").value = "4";
+      buildFamilySetupUI();
+      buildFamily();
+      state.difficulty = ($("#difficulty") && $("#difficulty").value) || "medium";
+      if (state.difficulty === "easy") {
+        state.resources = { gas: 100, food: 80, money: 150, morale: 85, heat: 0 };
+      }
+      show("hub");
+      log("Skipped setup. Random family. Day 1.");
+    };
 
     $("#btn-family-done").onclick = () => {
       try {
         buildFamily();
+        state.playerOutfit = ($("#player-outfit") && $("#player-outfit").value) || "casual";
+        state.familyName = ($("#family-name") && $("#family-name").value) || "";
         const diffEl = $("#difficulty");
         state.difficulty = diffEl ? diffEl.value : "medium";
         if (state.difficulty === "easy") {
@@ -1938,7 +2123,7 @@
         if (Math.random() > 0.35) advanceDay("Miles go by.");
 
         if (dest === "highway") {
-          change("gas", -4); // extra gas handled in drive
+          change("gas", -4);
           startHighway();
           log("Merging onto Twin Lakes Highway.");
           return;
@@ -1946,6 +2131,8 @@
         if (dest === "reststop") { enterReststop(); log("Stopped at Rusty's."); }
         else if (dest === "campground") { enterCampground(); }
         else if (dest === "diner") { enterDiner(); log("Pulled into the diner."); }
+        else if (dest === "twinlakes") { enterTwinLakes(); log("Twin Lakes overlook."); }
+        else if (dest === "bluegrass") { enterBluegrass(); log("Crossed into the Bluegrass State."); }
         updateHub();
       };
     });

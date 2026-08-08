@@ -90,7 +90,19 @@
         <div id="family-members-setup"></div>
         <p class="hint">Same personality options for everyone. Appearance is saved for your character.</p>
       </div>
+      <label>Outfit vibe:
+        <select id="player-outfit">
+          <option value="casual">Casual road trip</option>
+          <option value="sporty">Sporty</option>
+          <option value="cozy">Cozy / hoodie</option>
+          <option value="fancy">Trying too hard</option>
+        </select>
+      </label>
+      <label>Family name (optional):
+        <input id="family-name" type="text" maxlength="20" placeholder="The ___ Family" style="width:100%;padding:8px;border-radius:8px;border:none;margin-top:4px;">
+      </label>
       <div class="family-footer">
+        <button id="btn-family-skip" class="btn secondary">Skip — random family</button>
         <button id="btn-family-done" class="btn primary">Hit the Road</button>
       </div>
     </section>
@@ -125,6 +137,8 @@
         <button class="btn dest" data-dest="campground">Shady Pines Campground</button>
         <button class="btn dest" data-dest="diner">Neon Diner & Gift Shop</button>
         <button class="btn dest primary" data-dest="highway">Drive: Twin Lakes Highway</button>
+        <button class="btn dest" data-dest="twinlakes">Twin Lakes Overlook</button>
+        <button class="btn dest" data-dest="bluegrass">Bluegrass State Welcome Center</button>
       </div>
       <button id="btn-map-back" class="btn secondary">Back to Camper</button>
     </section>
