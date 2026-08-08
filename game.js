@@ -72,44 +72,64 @@
     TN: { name: "Tennessee", places: [
       { id: "reststop", label: "Rusty's Roadside Rest Stop" },
       { id: "campground", label: "Shady Pines Campground" },
-      { id: "diner", label: "Neon Diner & Gift Shop" }
+      { id: "diner", label: "Neon Diner & Gift Shop" },
+      { id: "gas", label: "Highway Gas & Snacks" },
+      { id: "mall", label: "Valley View Mall" }
     ]},
     KY: { name: "Kentucky", places: [
       { id: "bluegrass", label: "Bluegrass Welcome Center" },
-      { id: "reststop", label: "Rest Area" }
+      { id: "reststop", label: "Rest Area" },
+      { id: "museum", label: "Horse Country Museum" },
+      { id: "city", label: "Downtown Strip" }
     ]},
     OH: { name: "Ohio", places: [
       { id: "twinlakes", label: "Twin Lakes Overlook" },
-      { id: "diner", label: "Lakeside Diner" }
+      { id: "diner", label: "Lakeside Diner" },
+      { id: "mall", label: "Lakeside Outlet Mall" },
+      { id: "gas", label: "Lakeside Fuel" }
     ]},
     IN: { name: "Indiana", places: [
       { id: "reststop", label: "Cornfield Rest Stop" },
-      { id: "campground", label: "Hoosier Campground" }
+      { id: "campground", label: "Hoosier Campground" },
+      { id: "museum", label: "Small Town History Museum" },
+      { id: "city", label: "Main Street" }
     ]},
     AL: { name: "Alabama", places: [
       { id: "campground", label: "Pine Campground" },
-      { id: "diner", label: "Southern Diner" }
+      { id: "diner", label: "Southern Diner" },
+      { id: "gas", label: "Pine Fuel Stop" },
+      { id: "city", label: "County Seat Square" }
     ]},
     GA: { name: "Georgia", places: [
       { id: "diner", label: "Peach Stand Diner" },
-      { id: "reststop", label: "I-75 Rest Stop" }
+      { id: "reststop", label: "I-75 Rest Stop" },
+      { id: "mall", label: "Peach Plaza" },
+      { id: "museum", label: "Roadside Oddities Museum" }
     ]},
     NC: { name: "North Carolina", places: [
       { id: "campground", label: "Blue Ridge Camp" },
-      { id: "twinlakes", label: "Mountain Overlook" }
+      { id: "twinlakes", label: "Mountain Overlook" },
+      { id: "city", label: "Mountain Town Center" },
+      { id: "gas", label: "Ridge Gas" }
     ]},
     VA: { name: "Virginia", places: [
       { id: "reststop", label: "Shenandoah Stop" },
-      { id: "diner", label: "Valley Diner" }
+      { id: "diner", label: "Valley Diner" },
+      { id: "museum", label: "Civil War Roadside Museum" },
+      { id: "mall", label: "Valley Mall" }
     ]},
     FL: { name: "Florida", places: [
       { id: "diner", label: "Orange Grove Cafe" },
-      { id: "campground", label: "Coastal Camp" }
+      { id: "campground", label: "Coastal Camp" },
+      { id: "city", label: "Boardwalk Strip" },
+      { id: "mall", label: "Sun Outlet Mall" }
     ]},
     TX: { name: "Texas", places: [
       { id: "reststop", label: "Big Sky Rest Stop" },
       { id: "diner", label: "BBQ Diner" },
-      { id: "campground", label: "Prairie Camp" }
+      { id: "campground", label: "Prairie Camp" },
+      { id: "city", label: "Stockyard District" },
+      { id: "gas", label: "Lone Star Fuel" }
     ]}
   };
 
@@ -192,7 +212,174 @@
     else if (id === "twinlakes") { enterTwinLakes(); log("Overlook."); }
     else if (id === "bluegrass") { enterBluegrass(); log("Welcome center."); }
     else if (id === "highway") { startHighway(); }
+    else if (id === "mall") { enterMall(); log("Mall parking lot."); }
+    else if (id === "gas") { enterGasStation(); log("Gas station."); }
+    else if (id === "museum") { enterMuseum(); log("Museum stop."); }
+    else if (id === "city") { enterCity(); log("City streets."); }
     updateHub();
+  }
+
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  function dynLine(npc, templates) {
+    // templates: array of strings with {day} {heat} {role} {state} {mood}
+    const mood = state.resources.morale > 70 ? "upbeat" : (state.resources.morale < 30 ? "drained" : "tired");
+    const heat = state.resources.heat > 40 ? "looking over your shoulder" : "pretty relaxed";
+    const ctx = {
+      day: String(state.day),
+      heat: heat,
+      role: state.playerRole || "traveler",
+      state: (STATE_INFO[state.currentState] && STATE_INFO[state.currentState].name) || "this state",
+      mood: mood,
+      food: state.resources.food,
+      money: state.resources.money
+    };
+    let t = pick(templates);
+    Object.keys(ctx).forEach(k => { t = t.replace(new RegExp("\\{" + k + "\\}", "g"), ctx[k]); });
+    // personality flavor
+    if (state.playerPersonality === "sarcastic" && Math.random() > 0.6) t += " …You answer with something dry.";
+    if (state.playerPersonality === "loud" && Math.random() > 0.7) t += " Your family is already talking over everyone.";
+    return t;
+  }
+
+  const SELL_PRICES = {
+    keychain: 1, snowglobe: 2, chicken: 3, duct_tape: 2, wire: 1, bottle_cap: 1,
+    spring: 1, magnet: 1, snacks: 2, gum: 1, bubbles: 2, spitballs: 2,
+    nunchucks: 4, antenna: 5, gum_trap: 3, chicken_decoy: 4, grabber: 4, patch_kit: 5,
+    locket: 8, batteries: 4
+  };
+
+  function sellItem(id) {
+    const it = state.inventory.find(i => i.id === id && i.qty > 0);
+    if (!it) { toast("You don't have that."); return; }
+    const price = SELL_PRICES[id] || 1;
+    useItem(id, 1);
+    change("money", price, "Sold " + it.name + " for $" + price);
+    toast("Sold " + it.name + " · +$" + price);
+  }
+
+  function openSellMenu(buyerName) {
+    const sellable = state.inventory.filter(i => i.qty > 0 && i.id !== "snacks");
+    if (!sellable.length) {
+      say(buyerName || "Buyer", "You've got nothing worth trading.", [{ label: "OK", fn: () => {} }]);
+      return;
+    }
+    const choices = sellable.slice(0, 8).map(it => ({
+      label: "Sell " + it.name + " ($" + (SELL_PRICES[it.id] || 1) + ") ×" + it.qty,
+      fn: () => sellItem(it.id)
+    }));
+    choices.push({ label: "Never mind", fn: () => {} });
+    say(buyerName || "Buyer", dynLine(buyerName, [
+      "What are you unloading today?",
+      "I'll take junk. Fair price. No questions if the heat's not too high.",
+      "Show me what you've got. Day {day} of a trip like yours, folks always need cash."
+    ]), choices);
+  }
+
+  function doLabor(place) {
+    const wage = place === "diner" ? 12 + Math.floor(Math.random() * 8) : 10 + Math.floor(Math.random() * 10);
+    say("Odd Jobs", dynLine("Boss", [
+      "They need a couple hours of help. Messy work. Pays cash.",
+      "Sweep, haul, smile at strangers. Classic road money.",
+      "On day {day}, honest work still beats sticky fingers — usually."
+    ]), [
+      { label: "Work for $" + wage + " (lose half day)", fn: () => {
+        change("money", wage, "Earned from " + place + " labor.");
+        change("morale", -3);
+        const you = state.family.find(f => f.isPlayer);
+        damageMember(you, 4);
+        advanceDay("Spent the afternoon working.");
+        toast("+$" + wage + " for the work");
+        show("hub");
+      }},
+      { label: "Not today", fn: () => {} }
+    ]);
+  }
+
+  function talkDynamicNPC(type) {
+    const tables = {
+      hobo: {
+        name: pick(["Roadside Hank", "Quiet Sue", "Old Map Guy", "Bench Philosopher"]),
+        lines: [
+          "Seen a lot of campers. Yours is louder than most.",
+          "Day {day} already? Time melts on the shoulder of the highway.",
+          "I used to have a house. Then I had a plan. Now I have a backpack.",
+          "Careful in {state}. Cops here notice out-of-state plates.",
+          "You're {heat}. I can tell."
+        ],
+        choices: (nm) => [
+          { label: "Give $5", fn: () => { if (state.resources.money >= 5) { change("money", -5); change("morale", 4, "Kindness noted."); } else toast("Broke."); } },
+          { label: "Ask for advice", fn: () => say(nm, pick(["Avoid the blue restrooms. Trust me.", "Sell junk at diners, not to cops.", "If a hoodie guy follows you, he already knows your route."]), [{ label: "Thanks", fn: () => {} }]) },
+          { label: "Offer snacks", fn: () => { if (hasItem("snacks")) { useItem("snacks"); change("morale", 5); toast("Shared snacks."); } else toast("No snacks."); } },
+          { label: "Leave", fn: () => {} }
+        ]
+      },
+      hippie: {
+        name: pick(["Starlight", "River", "Moonbeam Jan", "Bus Keith"]),
+        lines: [
+          "The road is a teacher, man. You're in the classroom.",
+          "Want to trade? I've got beads and questionable wisdom.",
+          "Your family's vibe is {mood}. I can feel it.",
+          "In {state} the trees listen better than people."
+        ],
+        choices: (nm) => [
+          { label: "Buy beads ($3)", fn: () => { if (state.resources.money >= 3) { change("money", -3); addOrStack({ id: "magnet", name: "Peace Beads", desc: "Probably not magical", qty: 1 }); change("morale", 3); } else toast("No cash."); } },
+          { label: "Chat about the trip", fn: () => say(nm, dynLine(nm, ["Keep going. The map is smaller than your courage.", "Don't let heat make you mean."]), [{ label: "Peace", fn: () => {} }]) },
+          { label: "Sell them junk", fn: () => openSellMenu(nm) },
+          { label: "Leave", fn: () => {} }
+        ]
+      },
+      business: {
+        name: pick(["Suit Greg", "Regional Manager Pat", "Briefcase Dana", "Conference Carl"]),
+        lines: [
+          "I'm between meetings. This is my idea of a vacation. Don't laugh.",
+          "You look like you need capital. Or a nap.",
+          "I once did a presentation in a camper. Never again."
+        ],
+        choices: (nm) => [
+          { label: "Ask for spare change", fn: () => { if (Math.random() > 0.5) { change("money", 5 + Math.floor(Math.random()*10), nm + " tips you."); } else toast("They check their phone and ignore you."); } },
+          { label: "Sell souvenir", fn: () => openSellMenu(nm) },
+          { label: "Talk shop", fn: () => say(nm, "Efficiency. Margins. Gas prices. Same nightmare in a nicer shirt.", [{ label: "Yeah…", fn: () => {} }]) },
+          { label: "Leave", fn: () => {} }
+        ]
+      },
+      family: {
+        name: pick(["The Hendersons", "Minivan Crew", "Rival Picnic Family", "Cheerful Campers"]),
+        lines: [
+          "Our kids won't stop asking if you're famous. You're not, right?",
+          "We've been on the road {day} days longer than planned. Send help.",
+          "Nice camper. Ours smells like feet and hope."
+        ],
+        choices: (nm) => [
+          { label: "Friendly chat", fn: () => { change("morale", 3); say(nm, "Safe travels. Watch for speed traps near the state line.", [{ label: "You too", fn: () => {} }]); } },
+          { label: "Trade snacks", fn: () => { if (hasItem("snacks")) { useItem("snacks"); change("food", 6); change("morale", 2); toast("Snack trade."); } else toast("No snacks to trade."); } },
+          { label: "Start trouble", fn: () => offerTrouble(nm) },
+          { label: "Leave", fn: () => {} }
+        ]
+      },
+      villain: {
+        name: pick(["Scar Hood", "Quiet Vince", "The Collector", "Lot Lurker"]),
+        lines: [
+          "Nice setup. Be a shame if something happened to the tires.",
+          "I've been watching the roads. And you.",
+          "Heat looks good on you. Or bad. Depends who's asking."
+        ],
+        choices: (nm) => [
+          { label: "Stand your ground", fn: () => {
+            if (Math.random() > 0.5) { change("morale", 5, "They back off."); }
+            else { change("heat", 8); const you = state.family.find(f => f.isPlayer); damageMember(you, 10); toast("Shove match. Ouch."); }
+          }},
+          { label: "Pay them off ($15)", fn: () => { if (state.resources.money >= 15) { change("money", -15); change("heat", -3); toast("They walk away."); } else toast("They sneer. You're broke."); } },
+          { label: "Bluff", fn: () => { if (state.playerPersonality === "loud" || Math.random() > 0.55) { change("morale", 4, "Bluff works."); } else { change("heat", 10); toast("They don't buy it."); } } },
+          { label: "Walk away carefully", fn: () => {} }
+        ]
+      }
+    };
+    const t = tables[type] || tables.hobo;
+    const nm = t.name;
+    const line = dynLine(nm, t.lines);
+    say(nm, line, t.choices(nm));
   }
 
   const personalities = {
@@ -563,12 +750,12 @@
       // map chromatic from C major degrees approx
       const semis = [0,2,4,5,7,9,11,12,14,16,17,19,21][deg] ?? deg;
       const freq = root * Math.pow(2, semis / 12);
-      playPianoNote(freq, now + i * beat * 0.5, beat * 0.45, 0.08);
+      playPianoNote(freq, now + i * beat * 0.5, beat * 0.45, 0.18);
     }
     for (let i = 0; i < 8; i++) {
       const semis = PIANO_BASS[i % PIANO_BASS.length];
       const freq = root * Math.pow(2, (semis - 12) / 12);
-      playPianoNote(freq, now + i * beat, beat * 0.9, 0.05);
+      playPianoNote(freq, now + i * beat, beat * 0.9, 0.12);
     }
     const loopMs = PIANO_MELODY.length * beat * 0.5 * 1000;
     music.timer = setTimeout(schedulePianoLoop, loopMs - 30);
@@ -678,12 +865,20 @@
       d.className = "inv-item";
       d.innerHTML = "<b>" + item.name + "</b> ×" + item.qty + (item.desc ? "<br><small>" + item.desc + "</small>" : "");
       const usable = ["antenna","gum_trap","chicken_decoy","grabber","patch_kit","chicken","snowglobe"].includes(item.id);
+      const sellable = SELL_PRICES[item.id] != null;
       if (usable) {
         const b = document.createElement("button");
         b.textContent = "Use";
         b.style.marginTop = "6px";
         b.onclick = () => { closeInv(); useSpecialItem(item.id); };
         d.appendChild(b);
+      }
+      if (sellable) {
+        const sb = document.createElement("button");
+        sb.textContent = "Sell $" + (SELL_PRICES[item.id] || 1);
+        sb.style.marginTop = "4px";
+        sb.onclick = () => { sellItem(item.id); openInv(); };
+        d.appendChild(sb);
       }
       list.appendChild(d);
     });
@@ -964,11 +1159,12 @@
     const hs = $("#hotspots");
     hs.innerHTML = "";
     const spots = [
-      { label: "Rusty", style: "left:4%;bottom:8%;width:28%;height:42%;", important: true, action: talkRusty, x: 12 },
-      { label: "⚠️ Cooler", style: "left:60%;bottom:8%;width:26%;height:30%;", important: true, action: examineCooler, x: 68 },
-      { label: "Other Family", style: "left:34%;bottom:6%;width:30%;height:42%;", action: talkRival, x: 42 },
-      { label: "Vending", style: "left:82%;bottom:28%;width:14%;height:28%;", action: examineVending, x: 80 },
-      { label: "Bench", style: "left:2%;top:52%;width:18%;height:12%;", action: examineBench, x: 14 }
+      { label: "Rusty", style: "left:4%;bottom:8%;width:24%;height:40%;", important: true, action: talkRusty, x: 12 },
+      { label: "⚠️ Cooler", style: "left:58%;bottom:8%;width:22%;height:28%;", important: true, action: examineCooler, x: 66 },
+      { label: "Other Family", style: "left:32%;bottom:6%;width:24%;height:40%;", action: talkRival, x: 40 },
+      { label: "Vending", style: "left:82%;bottom:28%;width:14%;height:28%;", action: examineVending, x: 86 },
+      { label: "Bench Hobo", style: "left:2%;top:48%;width:18%;height:18%;", action: () => talkDynamicNPC("hobo"), x: 12 },
+      { label: "Sell to Rusty", style: "left:78%;bottom:8%;width:18%;height:18%;", action: () => openSellMenu("Rusty"), x: 84 }
     ];
     spots.forEach(h => hs.appendChild(makeHotspot(h)));
     show("scene");
@@ -1005,11 +1201,13 @@
           { label: "Found it in the woods near a campground", fn: () => {
             useItem("locket");
             state.flags.locketReturned = true;
-            change("morale", 6);
-            change("money", 15, "Rusty presses a worn $15 into your hand.");
-            toast("Side quest done: Returned the locket");
-            say("Rusty", "Belonged to my sister. Lost it years ago on a trip. Thank you.", [
-              { label: "Glad it found its way back", fn: () => {} }
+            change("morale", 12, "Doing the right thing feels good.");
+            change("money", 35, "Rusty presses cash into your hand — more than expected.");
+            change("heat", -5);
+            addOrStack({ id: "duct_tape", name: "Duct Tape", desc: "Gift from Rusty", qty: 2 });
+            toast("Side quest complete! +$35, tape, lower heat");
+            say("Rusty", "Belonged to my sister. Lost it years ago on a trip. Thank you. Take this — and if you need a tip on the road, ask.", [
+              { label: "Appreciate it", fn: () => {} }
             ]);
           }},
           { label: "None of your business", fn: () => {
@@ -1283,11 +1481,13 @@
     const hs = $("#hotspots");
     hs.innerHTML = "";
     const spots = [
-      { label: "Your Camper", style: "left:55%;bottom:12%;width:28%;height:36%;", important: true, action: campCamper, x: 62 },
-      { label: "Campfire", style: "left:22%;bottom:18%;width:22%;height:24%;", action: campFire, x: 28 },
-      { label: "Shady Guy", style: "left:8%;bottom:14%;width:20%;height:38%;", important: true, action: campShady, x: 14 },
-      { label: "Trees", style: "left:78%;bottom:20%;width:18%;height:40%;", action: campTrees, x: 80 },
-      { label: "Path", style: "left:40%;bottom:4%;width:20%;height:14%;", action: campPath, x: 45 }
+      { label: "Your Camper", style: "left:55%;bottom:12%;width:26%;height:34%;", important: true, action: campCamper, x: 62 },
+      { label: "Campfire", style: "left:28%;bottom:16%;width:20%;height:24%;", action: campFire, x: 34 },
+      { label: "Shady Guy", style: "left:6%;bottom:14%;width:18%;height:36%;", important: true, action: campShady, x: 12 },
+      { label: "Trees", style: "left:78%;bottom:20%;width:16%;height:38%;", action: campTrees, x: 84 },
+      { label: "Odd Jobs", style: "left:48%;bottom:28%;width:16%;height:22%;", important: true, action: () => doLabor("campground"), x: 54 },
+      { label: "Hippie Tent", style: "left:18%;top:20%;width:18%;height:24%;", action: () => talkDynamicNPC("hippie"), x: 24 },
+      { label: "Path", style: "left:40%;bottom:2%;width:18%;height:12%;", action: campPath, x: 45 }
     ];
     spots.forEach(h => hs.appendChild(makeHotspot(h)));
     show("scene");
@@ -1338,6 +1538,10 @@
             { label: "Give them the batteries", fn: () => {
               useItem("batteries");
               state.flags.batteriesDelivered = true;
+              change("money", 25, "They chip in for the help.");
+              change("morale", 10, "Radio crackles back to life.");
+              change("food", 8, "They share some trail mix.");
+              toast("Side quest complete! Cash, food, morale");
               change("morale", 8, "They light up. Literally.");
               change("money", 5, "They insist on five bucks.");
               toast("Side quest done: Batteries delivered");
@@ -1714,10 +1918,12 @@
     hs.innerHTML = "";
     // Positions tuned to claymation diner background
     const spots = [
-      { label: "Waitress", style: "left:4%;bottom:4%;width:26%;height:52%;", important: true, action: talkWaitress, x: 14 },
-      { label: "Jukebox", style: "left:30%;bottom:22%;width:16%;height:38%;", action: examineJukebox, x: 36 },
-      { label: "Guy at Counter", style: "left:48%;bottom:10%;width:18%;height:42%;", important: true, action: talkCounter, x: 54 },
-      { label: "Gift Shelf", style: "left:74%;bottom:22%;width:20%;height:42%;", action: examineGifts, x: 80 }
+      { label: "Waitress", style: "left:4%;bottom:4%;width:24%;height:50%;", important: true, action: talkWaitress, x: 14 },
+      { label: "Jukebox", style: "left:28%;bottom:22%;width:16%;height:36%;", action: examineJukebox, x: 34 },
+      { label: "Guy at Counter", style: "left:44%;bottom:10%;width:16%;height:40%;", important: true, action: talkCounter, x: 50 },
+      { label: "Gift Shelf", style: "left:62%;bottom:22%;width:16%;height:38%;", action: examineGifts, x: 68 },
+      { label: "Odd Jobs", style: "left:80%;bottom:12%;width:16%;height:30%;", important: true, action: () => doLabor("diner"), x: 86 },
+      { label: "Booth Family", style: "left:10%;top:18%;width:18%;height:22%;", action: () => talkDynamicNPC("family"), x: 18 }
     ];
     spots.forEach(h => hs.appendChild(makeHotspot(h)));
     show("scene");
@@ -2681,6 +2887,92 @@
     ctx.arcTo(x, y + h, x, y, r);
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
+  }
+
+
+  function enterGenericScene(bgClass, title, spots, playerX) {
+    clearSprites();
+    $("#scene-bg").className = bgClass;
+    $("#scene-title").textContent = title;
+    maybeStalkShady(title);
+    const hs = $("#hotspots");
+    hs.innerHTML = "";
+    spots.forEach(h => hs.appendChild(makeHotspot(h)));
+    show("scene");
+    state.playerX = playerX || 40;
+    ensureWalkLayer();
+    ensurePlayerSprite();
+  }
+
+  function enterMall() {
+    enterGenericScene("diner", "Mall Corridor", [
+      { label: "Food Court", style: "left:8%;bottom:10%;width:24%;height:40%;", important: true, action: () => {
+        say("Food Court", dynLine("Court", ["Grease, neon, and regret. Meals from $8."]), [
+          { label: "Buy family meal ($18)", fn: () => { if (state.resources.money >= 18) { change("money", -18); change("food", 25); change("morale", 6); } else toast("Broke."); } },
+          { label: "Talk to hippie vendor", fn: () => talkDynamicNPC("hippie") },
+          { label: "Leave", fn: () => {} }
+        ]);
+      }, x: 16 },
+      { label: "Kiosk Vendor", style: "left:38%;bottom:14%;width:22%;height:36%;", important: true, action: () => talkDynamicNPC("business"), x: 48 },
+      { label: "Sell Junk", style: "left:62%;bottom:12%;width:20%;height:30%;", action: () => openSellMenu("Mall Buyer"), x: 70 },
+      { label: "Shady Corner", style: "left:78%;bottom:20%;width:18%;height:34%;", action: () => talkDynamicNPC("villain"), x: 84 },
+      { label: "Exit", style: "left:40%;bottom:2%;width:20%;height:12%;", action: () => show("hub"), x: 50 }
+    ], 30);
+  }
+
+  function enterGasStation() {
+    enterGenericScene("reststop", "Gas Station", [
+      { label: "Pump", style: "left:10%;bottom:12%;width:22%;height:36%;", important: true, action: () => {
+        say("Pump", "Gas is pricey. Tank looks thirsty.", [
+          { label: "Fill up ($25)", fn: () => { if (state.resources.money >= 25) { change("money", -25); change("gas", 40); toast("Tank happier."); } else toast("Not enough."); } },
+          { label: "Partial ($12)", fn: () => { if (state.resources.money >= 12) { change("money", -12); change("gas", 18); } else toast("Nope."); } },
+          { label: "Leave", fn: () => {} }
+        ]);
+      }, x: 18 },
+      { label: "Clerk", style: "left:40%;bottom:10%;width:22%;height:40%;", important: true, action: () => {
+        say("Clerk", dynLine("Clerk", ["Bathroom code is on the receipt. Don't ask twice.", "We buy scrap. We sell regret."]), [
+          { label: "Buy snacks ($6)", fn: () => { if (state.resources.money >= 6) { change("money", -6); addOrStack({ id: "snacks", name: "Road Snacks", qty: 2 }); change("food", 5); } else toast("Broke."); } },
+          { label: "Sell junk", fn: () => openSellMenu("Clerk") },
+          { label: "Ask about work", fn: () => doLabor("gas") },
+          { label: "Leave", fn: () => {} }
+        ]);
+      }, x: 48 },
+      { label: "Lot Hobo", style: "left:68%;bottom:14%;width:20%;height:36%;", action: () => talkDynamicNPC("hobo"), x: 76 },
+      { label: "Other Family", style: "left:5%;top:20%;width:22%;height:28%;", action: () => talkDynamicNPC("family"), x: 14 },
+      { label: "Leave", style: "left:40%;bottom:2%;width:20%;height:12%;", action: () => show("hub"), x: 50 }
+    ], 28);
+  }
+
+  function enterMuseum() {
+    enterGenericScene("twinlakes", "Local Museum", [
+      { label: "Exhibits", style: "left:12%;bottom:14%;width:28%;height:40%;", important: true, action: () => {
+        say("Exhibit", dynLine("Plaque", ["Local legend says a camper once vanished here. Probably marketing.", "Artifacts: a boot, a map, three lies."]), [
+          { label: "Pay admission ($5)", fn: () => { if (state.resources.money >= 5) { change("money", -5); change("morale", 8, "Culture!"); } else toast("Can't afford culture."); } },
+          { label: "Sneak in", fn: () => { change("heat", 8); change("morale", 3, "Free and nervy."); } },
+          { label: "Leave", fn: () => {} }
+        ]);
+      }, x: 22 },
+      { label: "Docent", style: "left:48%;bottom:12%;width:22%;height:38%;", important: true, action: () => talkDynamicNPC("business"), x: 56 },
+      { label: "Gift Desk", style: "left:72%;bottom:16%;width:20%;height:32%;", action: () => openSellMenu("Museum Desk"), x: 80 },
+      { label: "Weird Patron", style: "left:8%;top:22%;width:20%;height:26%;", action: () => talkDynamicNPC("villain"), x: 16 },
+      { label: "Exit", style: "left:40%;bottom:2%;width:20%;height:12%;", action: () => show("hub"), x: 50 }
+    ], 35);
+  }
+
+  function enterCity() {
+    enterGenericScene("campground", "City Streets", [
+      { label: "Street Musician", style: "left:10%;bottom:12%;width:22%;height:38%;", important: true, action: () => talkDynamicNPC("hippie"), x: 18 },
+      { label: "Corner Hobo", style: "left:36%;bottom:10%;width:22%;height:36%;", action: () => talkDynamicNPC("hobo"), x: 44 },
+      { label: "Business Lunch", style: "left:60%;bottom:14%;width:22%;height:34%;", action: () => talkDynamicNPC("business"), x: 68 },
+      { label: "Alley Deal", style: "left:78%;bottom:20%;width:18%;height:32%;", important: true, action: () => {
+        say("Alley", "Someone wants to buy 'whatever fell off a truck.'", [
+          { label: "Sell stolen-ish junk", fn: () => { openSellMenu("Fence"); change("heat", 6); } },
+          { label: "Talk to them", fn: () => talkDynamicNPC("villain") },
+          { label: "Back out", fn: () => {} }
+        ]);
+      }, x: 84 },
+      { label: "Leave Town", style: "left:40%;bottom:2%;width:22%;height:12%;", action: () => show("hub"), x: 50 }
+    ], 30);
   }
 
   // ---------- WIRE UP ----------
