@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Camper Quest – Prototype</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container">
+    <!-- Title / Menu Screen -->
+    <div id="screen-title" class="screen active">
+      <h1>Camper Quest</h1>
+      <p class="subtitle">Claymation Family Road Trip</p>
+      <p class="tagline">50 States • Foam Fights • Questionable Decisions</p>
+      <button id="btn-start" class="big-btn">Start Road Trip</button>
+      <p class="hint">Prototype Vertical Slice</p>
+    </div>
+
+    <!-- Family Creation (simplified) -->
+    <div id="screen-family" class="screen">
+      <h2>Create Your Family</h2>
+      <div class="family-form">
+        <label>Your Role:
+          <select id="player-role">
+            <option value="sister">Older Sister</option>
+            <option value="brother">Older Brother</option>
+            <option value="mom">Mom</option>
+            <option value="dad">Dad</option>
+            <option value="younger">Younger Sibling</option>
+          </select>
+        </label>
+        <label>Family Size:
+          <select id="family-size">
+            <option value="3">3 (Easy)</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+            <option value="6">6 (Harder)</option>
+          </select>
+        </label>
+        <p class="note">Larger families = more chaos, higher resource drain, more comedy.</p>
+      </div>
+      <button id="btn-family-done" class="big-btn">Hit the Road</button>
+    </div>
+
+    <!-- Camper Hub -->
+    <div id="screen-hub" class="screen">
+      <h2>The Camper</h2>
+      <div id="resources" class="resource-bar">
+        <div class="res"><span>⛽ Gas</span><span id="res-gas">80</span></div>
+        <div class="res"><span>🍎 Food</span><span id="res-food">60</span></div>
+        <div class="res"><span>💵 Money</span><span id="res-money">120</span></div>
+        <div class="res"><span>😊 Morale</span><span id="res-morale">75</span></div>
+        <div class="res"><span>🔥 Heat</span><span id="res-heat">0</span></div>
+      </div>
+      <div class="hub-actions">
+        <button id="btn-rest">Rest (Restore Morale)</button>
+        <button id="btn-eat">Eat (-Food, +Morale)</button>
+        <button id="btn-map">Look at Map</button>
+        <button id="btn-depart" class="big-btn">Depart for Next Stop</button>
+      </div>
+      <div id="family-status" class="family-status"></div>
+      <div id="hub-log" class="log"></div>
+    </div>
+
+    <!-- Map / Travel Select -->
+    <div id="screen-map" class="screen">
+      <h2>Where to next?</h2>
+      <div class="map-options">
+        <button class="dest-btn" data-dest="reststop">Mystery Rest Stop (Nearby)</button>
+        <button class="dest-btn" data-dest="campground">Shady Campground</button>
+        <button class="dest-btn" data-dest="twine">World’s Largest Ball of Twine</button>
+      </div>
+      <button id="btn-map-back" class="secondary-btn">Back to Camper</button>
+    </div>
+
+    <!-- First-Person Exploration -->
+    <div id="screen-fps" class="screen">
+      <canvas id="game-canvas"></canvas>
+      <div id="fps-ui">
+        <div id="crosshair">+</div>
+        <div id="ammo">🫧 Foam: <span id="ammo-count">12</span></div>
+        <div id="interact-prompt" class="hidden">Tap to Interact</div>
+        <div id="message" class="message hidden"></div>
+      </div>
+      <!-- Touch Controls -->
+      <div id="touch-controls">
+        <div id="joystick-zone">
+          <div id="joystick-base">
+            <div id="joystick-knob"></div>
+          </div>
+        </div>
+        <div id="look-zone"></div>
+        <button id="btn-shoot" class="action-btn">🫧</button>
+        <button id="btn-interact" class="action-btn">✋</button>
+        <button id="btn-inventory" class="action-btn">🎒</button>
+      </div>
+      <button id="btn-exit-fps" class="secondary-btn top-right">Back to Camper</button>
+    </div>
+
+    <!-- Dialogue / Event Overlay -->
+    <div id="overlay-dialogue" class="overlay hidden">
+      <div class="dialogue-box">
+        <div id="dialogue-speaker"></div>
+        <div id="dialogue-text"></div>
+        <div id="dialogue-choices"></div>
+      </div>
+    </div>
+
+    <!-- Inventory Overlay -->
+    <div id="overlay-inventory" class="overlay hidden">
+      <div class="inventory-box">
+        <h3>Inventory</h3>
+        <div id="inventory-list"></div>
+        <button id="btn-close-inv" class="secondary-btn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
