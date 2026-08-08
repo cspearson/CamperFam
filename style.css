@@ -196,51 +196,22 @@ h2 {
 #scene-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, #7ec8e3 0%, #7ec8e3 40%, #c4a574 40%, #8a6d4b 100%);
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-color: #87CEEB;
 }
 
-#scene-bg.reststop::before {
-  content: "";
-  position: absolute;
-  bottom: 36%;
-  left: 6%;
-  right: 6%;
-  height: 30%;
-  background: #d4a574;
-  border-radius: 10px 10px 0 0;
-  box-shadow: 0 -5px 0 #b8956a;
+#scene-bg.reststop {
+  background-image: url("bg-reststop.jpg");
 }
 
-#scene-bg.reststop::after {
-  content: "Rusty's Rest Stop";
-  position: absolute;
-  top: 11%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #c0392b;
-  color: #fff;
-  padding: 7px 16px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 0.95rem;
-  white-space: nowrap;
-  box-shadow: 0 3px 0 #8b2e22;
+#scene-bg.campground {
+  background-image: url("bg-campground.jpg");
 }
 
 #scene-bg.diner {
   background: linear-gradient(180deg, #1a1a2e 0%, #1a1a2e 35%, #2d2d44 35%, #1f1f2e 100%);
-}
-
-#scene-bg.diner::before {
-  content: "";
-  position: absolute;
-  bottom: 30%;
-  left: 10%;
-  right: 10%;
-  height: 35%;
-  background: #ff6b6b;
-  border-radius: 12px 12px 0 0;
-  box-shadow: 0 0 30px rgba(255,107,107,0.4);
 }
 
 #scene-bg.diner::after {
@@ -255,6 +226,19 @@ h2 {
   letter-spacing: 2px;
   text-shadow: 0 0 12px #ff6b6b;
 }
+
+/* Character / object sprites in scene */
+.scene-sprite {
+  position: absolute;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.35));
+}
+.scene-sprite.rusty { bottom: 8%; left: 4%; height: 42%; max-width: 28%; }
+.scene-sprite.rival { bottom: 6%; left: 36%; height: 40%; max-width: 32%; }
+.scene-sprite.cooler { bottom: 10%; left: 62%; height: 26%; max-width: 22%; }
+.scene-sprite.waitress { bottom: 8%; left: 12%; height: 48%; max-width: 30%; }
+
 
 #hotspots { position: absolute; inset: 0; }
 

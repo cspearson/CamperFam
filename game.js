@@ -55,17 +55,30 @@
     if (id === "map") $("#map-day").textContent = state.day;
   }
 
+  function getOtherRoles(playerRole, count) {
+    const pools = {
+      "Dad": ["Mom", "Older Sister", "Older Brother", "Younger Brother", "Little Sister", "Cousin"],
+      "Mom": ["Dad", "Older Sister", "Older Brother", "Younger Brother", "Little Sister", "Cousin"],
+      "Older Sister": ["Mom", "Dad", "Younger Brother", "Little Sister", "Cousin", "Uncle"],
+      "Older Brother": ["Mom", "Dad", "Younger Brother", "Little Sister", "Cousin", "Aunt"],
+      "Younger Sibling": ["Mom", "Dad", "Older Sister", "Older Brother", "Cousin", "Uncle"]
+    };
+    const list = pools[playerRole] || pools["Older Sister"];
+    return list.slice(0, count);
+  }
+
   function buildFamilySetupUI() {
     const size = parseInt($("#family-size").value, 10);
+    const playerRole = $("#player-role").value;
     const container = $("#family-members-setup");
     container.innerHTML = "";
-    const roles = ["Dad", "Mom", "Younger Brother", "Little Sister", "Cousin", "Uncle"];
-    for (let i = 1; i < size; i++) {
+    const roles = getOtherRoles(playerRole, size - 1);
+    roles.forEach((role, i) => {
       const div = document.createElement("div");
       div.style.marginTop = "10px";
       div.innerHTML = `
-        <label style="font-size:0.9rem">${roles[i-1] || "Family Member"} personality:
-          <select class="member-personality" data-idx="${i}">
+        <label style="font-size:0.9rem">${role} personality:
+          <select class="member-personality" data-role="${role}">
             <option value="grumpy">Grumpy</option>
             <option value="optimistic">Optimistic</option>
             <option value="quiet">Quiet</option>
@@ -75,14 +88,13 @@
           </select>
         </label>`;
       container.appendChild(div);
-    }
+    });
   }
 
   function buildFamily() {
     state.playerRole = $("#player-role").value;
     state.playerPersonality = $("#player-personality").value;
     state.familySize = parseInt($("#family-size").value, 10);
-    const roles = ["Dad", "Mom", "Younger Brother", "Little Sister", "Cousin", "Uncle"];
     state.family = [{
       name: "You",
       role: state.playerRole,
@@ -90,15 +102,15 @@
       isPlayer: true
     }];
     const selects = $$(".member-personality");
-    selects.forEach((sel, i) => {
+    selects.forEach((sel) => {
+      const role = sel.getAttribute("data-role") || "Family";
       state.family.push({
-        name: roles[i] || "Family",
-        role: roles[i] || "Family",
+        name: role,
+        role: role,
         personality: sel.value,
         isPlayer: false
       });
     });
-    // fill remaining if needed
     while (state.family.length < state.familySize) {
       state.family.push({ name: "Family", role: "Family", personality: "quiet", isPlayer: false });
     }
@@ -194,17 +206,34 @@
   }
 
   // ---------- REST STOP ----------
+  function clearSprites() {
+    document.querySelectorAll(".scene-sprite").forEach(el => el.remove());
+  }
+
+  function addSprite(src, className) {
+    const img = document.createElement("img");
+    img.src = src;
+    img.className = "scene-sprite " + className;
+    img.alt = className;
+    $("#scene-stage").appendChild(img);
+  }
+
   function enterReststop() {
+    clearSprites();
     $("#scene-bg").className = "reststop";
     $("#scene-title").textContent = "Rusty's Roadside Rest Stop";
+    addSprite("char-rusty.jpg", "rusty");
+    addSprite("char-rival-family.jpg", "rival");
+    addSprite("obj-cooler.jpg", "cooler");
+
     const hs = $("#hotspots");
     hs.innerHTML = "";
     [
-      { label: "Rusty", style: "left:10%;bottom:20%;width:24%;height:30%;", important: true, action: talkRusty },
-      { label: "⚠️ Cooler", style: "left:55%;bottom:18%;width:26%;height:24%;", important: true, action: examineCooler },
-      { label: "Other Family", style: "left:35%;bottom:16%;width:22%;height:28%;", action: talkRival },
-      { label: "Vending", style: "left:78%;bottom:26%;width:16%;height:32%;", action: examineVending },
-      { label: "Bench", style: "left:5%;top:48%;width:20%;height:14%;", action: examineBench }
+      { label: "Rusty", style: "left:4%;bottom:8%;width:28%;height:42%;", important: true, action: talkRusty },
+      { label: "⚠️ Cooler", style: "left:60%;bottom:8%;width:26%;height:30%;", important: true, action: examineCooler },
+      { label: "Other Family", style: "left:34%;bottom:6%;width:30%;height:42%;", action: talkRival },
+      { label: "Vending", style: "left:82%;bottom:28%;width:14%;height:28%;", action: examineVending },
+      { label: "Bench", style: "left:2%;top:52%;width:18%;height:12%;", action: examineBench }
     ].forEach(h => {
       const el = document.createElement("div");
       el.className = "hotspot" + (h.important ? " important" : "");
@@ -486,6 +515,11 @@
   // ---------- CAMPGROUND ----------
   function enterCampground() {
     if (!state.flags.visitedCamp) { state.flags.visitedCamp = true; state.statesVisited++; }
+    clearSprites();
+    $("#scene-bg").className = "campground";
+    $("#scene-title").textContent = "Shady Pines Campground";
+    $("#hotspots").innerHTML = "";
+    show("scene");
     say("Shady Pines", "It's getting dark. Your camper is under the trees. Something scrapes near the back storage door.", [
       { label: "Go check", fn: () => {
         say("Behind the Camper", "Someone's trying the latch on the storage compartment.", [
@@ -523,15 +557,17 @@
   // ---------- DINER ----------
   function enterDiner() {
     if (!state.flags.visitedDiner) { state.flags.visitedDiner = true; state.statesVisited++; }
+    clearSprites();
     $("#scene-bg").className = "diner";
     $("#scene-title").textContent = "Neon Diner";
+    addSprite("char-waitress.jpg", "waitress");
     const hs = $("#hotspots");
     hs.innerHTML = "";
     [
-      { label: "Waitress", style: "left:18%;bottom:22%;width:24%;height:28%;", important: true, action: talkWaitress },
+      { label: "Waitress", style: "left:8%;bottom:6%;width:32%;height:50%;", important: true, action: talkWaitress },
       { label: "Gift Shelf", style: "left:58%;bottom:20%;width:24%;height:26%;", action: examineGifts },
       { label: "Jukebox", style: "left:6%;top:42%;width:18%;height:20%;", action: examineJukebox },
-      { label: "Guy at Counter", style: "left:40%;bottom:18%;width:20%;height:24%;", action: talkCounter }
+      { label: "Guy at Counter", style: "left:42%;bottom:18%;width:20%;height:24%;", action: talkCounter }
     ].forEach(h => {
       const el = document.createElement("div");
       el.className = "hotspot" + (h.important ? " important" : "");
@@ -724,6 +760,7 @@
   // ---------- WIRE UP ----------
   function init() {
     $("#family-size").addEventListener("change", buildFamilySetupUI);
+    $("#player-role").addEventListener("change", buildFamilySetupUI);
     buildFamilySetupUI();
 
     $("#btn-start").onclick = () => show("family");
@@ -773,6 +810,7 @@
     });
 
     $("#btn-leave").onclick = () => {
+      clearSprites();
       show("hub");
       log("Back at the camper.");
     };
