@@ -154,12 +154,16 @@
       box.innerHTML = "";
       state.family.forEach(f => {
         const img = document.createElement("img");
-        if (f.isPlayer) img.src = getPlayerSpriteSrc();
-        else if (f.role === "Dad" || f.name === "Dad") img.src = "portrait-dad.jpg";
-        else if (f.role === "Mom" || f.name === "Mom") img.src = "portrait-mom.jpg";
-        else img.src = "player-brother.jpg";
+        let src;
+        if (f.isPlayer) src = getPlayerSpriteSrc();
+        else if (f.role === "Dad" || f.name === "Dad") src = "portrait-dad.jpg";
+        else if (f.role === "Mom" || f.name === "Mom") src = "portrait-mom.jpg";
+        else src = "player-brother.jpg";
+        img.src = src;
         img.alt = f.name || f.role;
-        img.title = (f.isPlayer ? "You" : f.name) + " – " + (personalities[f.personality]?.label || "");
+        const label = (f.isPlayer ? "You (" + f.role + ")" : f.name) + " – " + (personalities[f.personality]?.label || f.personality || "");
+        img.title = label;
+        img.onclick = () => openPortrait(src, label);
         box.appendChild(img);
       });
     } catch (e) { console.warn("portraits", e); }
@@ -178,7 +182,19 @@
     t._t = setTimeout(() => t.classList.add("hidden"), ms);
   }
 
-  function change(key, amount, msg) {
+  function openPortrait(src, label) {
+    const img = $("#portrait-viewer-img");
+    const name = $("#portrait-viewer-name");
+    if (img) img.src = src;
+    if (name) name.textContent = label || "";
+    $("#portrait-viewer").classList.remove("hidden");
+  }
+
+  function closePortrait() {
+    $("#portrait-viewer").classList.add("hidden");
+  }
+
+    function change(key, amount, msg) {
     const max = (key === "morale" || key === "heat") ? 100 : 999;
     state.resources[key] = Math.max(0, Math.min(max, state.resources[key] + amount));
     if (msg) toast(msg);
@@ -959,6 +975,10 @@
 
     $("#btn-inventory").onclick = openInv;
     $("#btn-close-inv").onclick = closeInv;
+    const cp = $("#btn-close-portrait");
+    if (cp) cp.onclick = closePortrait;
+    const pv = $("#portrait-viewer");
+    if (pv) pv.addEventListener("click", (e) => { if (e.target === pv) closePortrait(); });
   }
 
   init();

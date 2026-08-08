@@ -473,3 +473,38 @@ h2 {
 .player-sprite.slim {
   max-width: 18%;
 }
+
+/* Full-screen portrait viewer */
+.portrait-viewer-panel {
+  background: #2a1c12;
+  border: 3px solid #e67e22;
+  border-radius: 18px;
+  padding: 18px;
+  width: 100%;
+  max-width: 360px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+#portrait-viewer-img {
+  width: 100%;
+  max-height: 55vh;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #1a120b;
+}
+#portrait-viewer-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f0b429;
+  text-align: center;
+}
+.family-portraits img {
+  cursor: pointer;
+}
+.family-portraits img:active {
+  transform: scale(0.95);
+  opacity: 0.85;
+}
