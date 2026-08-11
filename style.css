@@ -858,3 +858,105 @@ h2 {
 }
 .fh-fill.low { background: #e74c3c; }
 .fh-status { font-size: 0.65rem; opacity: 0.85; }
+
+.save-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+  margin: 12px auto;
+}
+.save-slot {
+  background: #3d5a4c !important;
+  text-align: left;
+  font-size: 0.92rem !important;
+}
+.save-slot.selected {
+  background: #c47b2b !important;
+  box-shadow: 0 0 0 2px #f5e6c8;
+}
+.save-slot.has-data {
+  background: #2d6a4f !important;
+}
+#drive-callout {
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 1rem;
+  z-index: 20;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+#drive-callout.show { opacity: 1; }
+
+#scene-bg.mall { background-image: url("bg-mall-v2.jpg"); background-size: cover; background-position: center; }
+#scene-bg.gas { background-image: url("bg-gas.jpg"); background-size: cover; background-position: center; }
+#scene-bg.museum { background-image: url("bg-museum-v2.jpg"); background-size: cover; background-position: center; }
+#scene-bg.city { background-image: url("bg-city-v2.jpg"); background-size: cover; background-position: center; }
+.scene-sprite.hobo { bottom: 8%; left: 68%; height: 40%; max-width: 24%; }
+.scene-sprite.hippie { bottom: 8%; left: 12%; height: 40%; max-width: 24%; }
+.scene-sprite.business { bottom: 8%; left: 42%; height: 40%; max-width: 22%; }
+.scene-sprite.villain { bottom: 8%; left: 78%; height: 40%; max-width: 22%; }
+.player-sprite {
+  transition: left 0.05s linear;
+  will-change: left, bottom;
+}
+.player-sprite.walking {
+  animation: walk-step 0.38s ease-in-out infinite;
+}
+@keyframes walk-step {
+  0% { transform: translateY(0) rotate(-1deg); }
+  25% { transform: translateY(-3%) rotate(1deg); }
+  50% { transform: translateY(0) rotate(-1deg); }
+  75% { transform: translateY(-2%) rotate(1.5deg); }
+  100% { transform: translateY(0) rotate(-1deg); }
+}
+.player-sprite.walking.flipped {
+  animation: walk-step-flip 0.38s ease-in-out infinite;
+}
+@keyframes walk-step-flip {
+  0% { transform: scaleX(-1) translateY(0) rotate(1deg); }
+  25% { transform: scaleX(-1) translateY(-3%) rotate(-1deg); }
+  50% { transform: scaleX(-1) translateY(0) rotate(1deg); }
+  75% { transform: scaleX(-1) translateY(-2%) rotate(-1.5deg); }
+  100% { transform: scaleX(-1) translateY(0) rotate(1deg); }
+}
+
+.hotspot.has-img {
+  background: transparent !important;
+  border: 2px solid rgba(255,255,255,0.35) !important;
+  box-shadow: none !important;
+}
+.hotspot.has-img .hotspot-img {
+  width: 100%;
+  height: 85%;
+  object-fit: contain;
+  object-position: bottom center;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+}
+.hotspot.has-img .hotspot-label {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.65);
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+.player-sprite.walking {
+  animation: none !important; /* bob handled in JS for realism */
+}
+
+.align-res b { color: #f0b429; min-width: 4.5rem; display: inline-block; }
+#bg-debug { max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

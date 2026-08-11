@@ -18,6 +18,8 @@
     pendingAction: null,
     family: [],
     resources: { gas: 80, food: 55, money: 110, morale: 70, heat: 0 },
+    alignment: 0, // -100 evil .. +100 good
+
     inventory: [
       { id: "bubbles", name: "Bubble Blaster", desc: "Shoots big floating bubbles", qty: 5 },
       { id: "spitballs", name: "Spitball Shooter", desc: "Old-school and annoying", qty: 8 },
@@ -238,8 +240,6 @@
     let t = pick(templates);
     Object.keys(ctx).forEach(k => { t = t.replace(new RegExp("\\{" + k + "\\}", "g"), ctx[k]); });
     // personality flavor
-    if (state.playerPersonality === "sarcastic" && Math.random() > 0.6) t += " …You answer with something dry.";
-    if (state.playerPersonality === "loud" && Math.random() > 0.7) t += " Your family is already talking over everyone.";
     return t;
   }
 
@@ -306,12 +306,13 @@
           "Day {day} already? Time melts on the shoulder of the highway.",
           "I used to have a house. Then I had a plan. Now I have a backpack.",
           "Careful in {state}. Cops here notice out-of-state plates.",
-          "You're {heat}. I can tell."
+          "You're {heat}. I can tell.",
+          "Your reputation precedes you — for better or worse.",
         ],
         choices: (nm) => [
-          { label: "Give $5", fn: () => { if (state.resources.money >= 5) { change("money", -5); change("morale", 4, "Kindness noted."); } else toast("Broke."); } },
+          { label: "Give $5", fn: () => { if (state.resources.money >= 5) { change("money", -5); change("morale", 4, "Kindness noted."); shiftAlign(6, "Helped someone in need"); } else toast("Broke."); } },
           { label: "Ask for advice", fn: () => say(nm, pick(["Avoid the blue restrooms. Trust me.", "Sell junk at diners, not to cops.", "If a hoodie guy follows you, he already knows your route."]), [{ label: "Thanks", fn: () => {} }]) },
-          { label: "Offer snacks", fn: () => { if (hasItem("snacks")) { useItem("snacks"); change("morale", 5); toast("Shared snacks."); } else toast("No snacks."); } },
+          { label: "Offer snacks", fn: () => { if (hasItem("snacks")) { useItem("snacks"); change("morale", 5); shiftAlign(4, "Shared food"); toast("Shared snacks."); } else toast("No snacks."); } },
           { label: "Leave", fn: () => {} }
         ]
       },
@@ -354,7 +355,7 @@
         choices: (nm) => [
           { label: "Friendly chat", fn: () => { change("morale", 3); say(nm, "Safe travels. Watch for speed traps near the state line.", [{ label: "You too", fn: () => {} }]); } },
           { label: "Trade snacks", fn: () => { if (hasItem("snacks")) { useItem("snacks"); change("food", 6); change("morale", 2); toast("Snack trade."); } else toast("No snacks to trade."); } },
-          { label: "Start trouble", fn: () => offerTrouble(nm) },
+          { label: "Start trouble", fn: () => { shiftAlign(-5, "Looking for a fight"); offerTrouble(nm); } },
           { label: "Leave", fn: () => {} }
         ]
       },
@@ -367,10 +368,10 @@
         ],
         choices: (nm) => [
           { label: "Stand your ground", fn: () => {
-            if (Math.random() > 0.5) { change("morale", 5, "They back off."); }
-            else { change("heat", 8); const you = state.family.find(f => f.isPlayer); damageMember(you, 10); toast("Shove match. Ouch."); }
+            if (Math.random() > 0.5) { change("morale", 5, "They back off."); shiftAlign(2, "Held firm"); }
+            else { change("heat", 8); const you = state.family.find(f => f.isPlayer); damageMember(you, 10); shiftAlign(-2, "Street scuffle"); toast("Shove match. Ouch."); }
           }},
-          { label: "Pay them off ($15)", fn: () => { if (state.resources.money >= 15) { change("money", -15); change("heat", -3); toast("They walk away."); } else toast("They sneer. You're broke."); } },
+          { label: "Pay them off ($15)", fn: () => { if (state.resources.money >= 15) { change("money", -15); change("heat", -3); shiftAlign(-3, "Paid off a threat"); toast("They walk away."); } else toast("They sneer. You're broke."); } },
           { label: "Bluff", fn: () => { if (state.playerPersonality === "loud" || Math.random() > 0.55) { change("morale", 4, "Bluff works."); } else { change("heat", 10); toast("They don't buy it."); } } },
           { label: "Walk away carefully", fn: () => {} }
         ]
@@ -378,7 +379,13 @@
     };
     const t = tables[type] || tables.hobo;
     const nm = t.name;
-    const line = dynLine(nm, t.lines);
+    let line = dynLine(nm, t.lines);
+    const a = state.alignment || 0;
+    if (type === "villain" && a >= 40) line += " They squint. "You smell like a goody-goody."";
+    if (type === "villain" && a <= -40) line += " A nod. "Heard of you. Not all bad — our kind of not-bad."";
+    if (type === "hobo" && a >= 30) line += " "You're one of the decent ones."";
+    if (type === "hobo" && a <= -30) line += " They edge away a little.";
+    if (type === "family" && a <= -50) line += " The parents pull the kids closer.";
     say(nm, line, t.choices(nm));
   }
 
@@ -421,32 +428,32 @@
   }
 
   function buildFamilySetupUI() {
-    const size = parseInt($("#family-size").value, 10);
-    const playerRole = $("#player-role").value;
+    const size = parseInt($("#family-size") && $("#family-size").value, 10) || 4;
+    const playerRole = ($("#player-role") && $("#player-role").value) || "Dad";
     const container = $("#family-members-setup");
+    if (!container) return;
     container.innerHTML = "";
-    const roles = getOtherRoles(playerRole, size - 1);
-    roles.forEach((role, i) => {
-      const div = document.createElement("div");
-      div.style.marginTop = "10px";
-      div.innerHTML = `
-        <label style="font-size:0.9rem">${role} personality:
-          <select class="member-personality" data-role="${role}">
-            <option value="sarcastic">Sarcastic</option>
-            <option value="peacemaker">Peacemaker</option>
-            <option value="troublemaker">Troublemaker</option>
-            <option value="anxious">Anxious</option>
-            <option value="optimistic">Optimistic</option>
-            <option value="grumpy">Grumpy</option>
-            <option value="quiet">Quiet</option>
-            <option value="loud">Loud</option>
-          </select>
-        </label>`;
-      container.appendChild(div);
+    const allRoles = ["Mom", "Dad", "Older Sister", "Older Brother", "Little Sister", "Younger Brother", "Cousin", "Aunt", "Uncle"];
+    const used = new Set([playerRole]);
+    const picks = [];
+    for (const r of allRoles) {
+      if (picks.length >= size - 1) break;
+      if (!used.has(r)) { picks.push(r); used.add(r); }
+    }
+    while (picks.length < size - 1) picks.push("Cousin");
+    const note = document.createElement("p");
+    note.className = "hint";
+    note.textContent = "Family members (personalities assigned randomly — no extra setup):";
+    container.appendChild(note);
+    picks.forEach(role => {
+      const row = document.createElement("div");
+      row.className = "member-row";
+      row.innerHTML = '<span class="member-role-label">' + role + '</span>';
+      container.appendChild(row);
     });
   }
 
-  function buildFamily() {
+  function buildFamilyfunction buildFamilyfunction buildFamily() {
     state.playerRole = $("#player-role").value;
     state.playerPersonality = $("#player-personality").value;
     state.playerHair = $("#player-hair").value;
@@ -463,13 +470,18 @@
       maxHp: 100,
       status: "ok" // ok | arrested | lost
     }];
-    const selects = $$(".member-personality");
-    selects.forEach((sel) => {
-      const role = sel.getAttribute("data-role") || "Family";
+    const persKeys = Object.keys(personalities);
+    const selects = []; // personalities randomized below
+    // Non-player members: roles from setup labels, personalities random
+    const labels = $$(".member-role-label");
+    const persKeys = Object.keys(personalities);
+    labels.forEach(lab => {
+      const role = lab.textContent.trim() || "Family";
+      const pers = persKeys[Math.floor(Math.random() * persKeys.length)];
       state.family.push({
         name: role,
         role: role,
-        personality: sel.value,
+        personality: pers,
         isPlayer: false,
         hp: 100,
         maxHp: 100,
@@ -477,7 +489,8 @@
       });
     });
     while (state.family.length < state.familySize) {
-      state.family.push({ name: "Family", role: "Family", personality: "quiet", isPlayer: false, hp: 100, maxHp: 100, status: "ok" });
+      const pers = persKeys[Math.floor(Math.random() * persKeys.length)];
+      state.family.push({ name: "Cousin", role: "Cousin", personality: pers, isPlayer: false, hp: 100, maxHp: 100, status: "ok" });
     }
   }
 
@@ -491,6 +504,7 @@
     $("#res-heat").textContent = state.resources.heat;
     const player = state.family.find(f => f.isPlayer);
     if (player && $("#res-hp")) $("#res-hp").textContent = Math.round(player.hp);
+    if ($("#res-align")) $("#res-align").textContent = alignTitle();
     renderFamilyHealth();
     const active = state.family.filter(f => f.status === "ok");
     const names = active.map(f => f.isPlayer ? `You (${f.role})` : `${f.name}`);
@@ -557,6 +571,7 @@
   }
 
   function advanceDay(reason) {
+    try { saveGame(); } catch (e) {}
     state.day++;
     state.dayLabel = dayLabels[Math.min(state.day, dayLabels.length - 1)] || `Day ${state.day}`;
     let drain = 3 + Math.floor(state.familySize / 2);
@@ -722,9 +737,9 @@
     osc2.type = "sine";
     osc2.frequency.value = freq * 2;
     const g2 = ctx.createGain();
-    g2.gain.value = gain * 0.25;
+    g2.gain.value = gain * 0.4;
     g.gain.setValueAtTime(0.0001, start);
-    g.gain.exponentialRampToValueAtTime(gain, start + 0.02);
+    g.gain.exponentialRampToValueAtTime(Math.min(1, gain * 1.35), start + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
     osc.connect(g); g.connect(ctx.destination);
     osc2.connect(g2); g2.connect(ctx.destination);
@@ -750,12 +765,12 @@
       // map chromatic from C major degrees approx
       const semis = [0,2,4,5,7,9,11,12,14,16,17,19,21][deg] ?? deg;
       const freq = root * Math.pow(2, semis / 12);
-      playPianoNote(freq, now + i * beat * 0.5, beat * 0.45, 0.18);
+      playPianoNote(freq, now + i * beat * 0.5, beat * 0.45, 0.32);
     }
     for (let i = 0; i < 8; i++) {
       const semis = PIANO_BASS[i % PIANO_BASS.length];
       const freq = root * Math.pow(2, (semis - 12) / 12);
-      playPianoNote(freq, now + i * beat, beat * 0.9, 0.12);
+      playPianoNote(freq, now + i * beat, beat * 0.9, 0.22);
     }
     const loopMs = PIANO_MELODY.length * beat * 0.5 * 1000;
     music.timer = setTimeout(schedulePianoLoop, loopMs - 30);
@@ -980,7 +995,18 @@
   function getFamilyMemberSprite(member) {
     if (!member || member.isPlayer) return getPlayerSpriteSrc();
     const role = member.role || member.name || "";
-    const tone = familyTone();
+    // Family shares look but not identical — slight tone drift
+    const base = familyTone();
+    const drift = ["light", "medium", "dark", "red"];
+    let tone = base;
+    if (member._tone) tone = member._tone;
+    else {
+      if (Math.random() < 0.35) {
+        const i = drift.indexOf(base);
+        tone = drift[Math.max(0, Math.min(3, i + (Math.random() > 0.5 ? 1 : -1)))] || base;
+      }
+      member._tone = tone;
+    }
     if (role === "Dad") {
       if (tone === "light") return "player-dad-light.png";
       if (tone === "dark") return "player-dad-dark.png";
@@ -1054,7 +1080,31 @@
   }
 
 
+  function shiftAlign(delta, reason) {
+    state.alignment = Math.max(-100, Math.min(100, (state.alignment || 0) + delta));
+    const a = state.alignment;
+    let label = "Neutral";
+    if (a >= 60) label = "Paragon";
+    else if (a >= 25) label = "Kind";
+    else if (a <= -60) label = "Renegade";
+    else if (a <= -25) label = "Shady";
+    if (reason) toast((delta > 0 ? "✦ " : "☠ ") + reason + " (" + label + ")");
+    const el = $("#res-align");
+    if (el) el.textContent = label;
+    return label;
+  }
+
+  function alignTitle() {
+    const a = state.alignment || 0;
+    if (a >= 60) return "Paragon";
+    if (a >= 25) return "Kind";
+    if (a <= -60) return "Renegade";
+    if (a <= -25) return "Shady";
+    return "Neutral";
+  }
+
   function offerTrouble(context, extraChoices = []) {
+    // mild renegade lean for opening trouble menu unless pure talk
     const base = [
       { label: "Keep it peaceful", fn: () => {} },
       { label: "Mouth off / insult", fn: () => {
@@ -1104,32 +1154,41 @@
     state.pendingAction = onArrive || null;
     p.classList.add("walking");
 
-    if (targetX > state.playerX) p.classList.remove("flipped");
-    else p.classList.add("flipped");
+    if (targetX > state.playerX + 0.5) p.classList.remove("flipped");
+    else if (targetX < state.playerX - 0.5) p.classList.add("flipped");
 
-    const start = state.playerX;
-    const dist = Math.abs(targetX - start);
-    const duration = Math.max(300, dist * 28);
-    const t0 = performance.now();
+    // Constant real-world-ish walk speed (~18% of screen width per second)
+    const speedPctPerSec = 22;
+    let last = performance.now();
+    let stepPhase = 0;
 
     function step(now) {
-      const t = Math.min(1, (now - t0) / duration);
-      const ease = t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
-      state.playerX = start + (targetX - start) * ease;
-      p.style.left = state.playerX + "%";
-      if (t < 1) {
-        requestAnimationFrame(step);
-      } else {
-        state.playerMoving = false;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const dir = targetX > state.playerX ? 1 : -1;
+      const remaining = Math.abs(targetX - state.playerX);
+      if (remaining < 0.35) {
         state.playerX = targetX;
         p.style.left = targetX + "%";
+        p.style.bottom = "6%";
+        p.style.transform = "";
+        state.playerMoving = false;
         p.classList.remove("walking");
         if (state.pendingAction) {
           const fn = state.pendingAction;
           state.pendingAction = null;
           fn();
         }
+        return;
       }
+      const move = Math.min(remaining, speedPctPerSec * dt);
+      state.playerX += dir * move;
+      stepPhase += dt * 7; // ~ steps per second
+      // gentle vertical bob only (no spin)
+      const bob = Math.abs(Math.sin(stepPhase)) * 1.4;
+      p.style.left = state.playerX + "%";
+      p.style.bottom = (6 + bob) + "%";
+      requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
@@ -1149,7 +1208,7 @@
 
   function enterReststop() {
     clearSprites();
-    $("#scene-bg").className = "reststop";
+    forceSceneBg("reststop");
     $("#scene-title").textContent = "Rusty's Roadside Rest Stop";
     addSprite("char-rusty.png", "rusty");
     maybeStalkShady("rest");
@@ -1205,6 +1264,7 @@
             change("money", 35, "Rusty presses cash into your hand — more than expected.");
             change("heat", -5);
             addOrStack({ id: "duct_tape", name: "Duct Tape", desc: "Gift from Rusty", qty: 2 });
+            shiftAlign(12, "Returned a family heirloom");
             toast("Side quest complete! +$35, tape, lower heat");
             say("Rusty", "Belonged to my sister. Lost it years ago on a trip. Thank you. Take this — and if you need a tip on the road, ask.", [
               { label: "Appreciate it", fn: () => {} }
@@ -1471,7 +1531,7 @@
   function enterCampground() {
     if (!state.flags.visitedCamp) { state.flags.visitedCamp = true; state.statesVisited++; }
     clearSprites();
-    $("#scene-bg").className = "campground";
+    forceSceneBg("campground");
     $("#scene-title").textContent = "Shady Pines Campground";
     maybeStalkShady("camp");
     // Use rival-family figure as a stand-in "shady" silhouette until dedicated art
@@ -1710,7 +1770,7 @@
   function enterForest() {
     state.flags.forestExplored = true;
     clearSprites();
-    $("#scene-bg").className = "forest";
+    forceSceneBg("forest");
     $("#scene-title").textContent = "Deep Woods";
     maybeStalkShady("forest");
     const hs = $("#hotspots");
@@ -1910,7 +1970,7 @@
   function enterDiner() {
     if (!state.flags.visitedDiner) { state.flags.visitedDiner = true; state.statesVisited++; }
     clearSprites();
-    $("#scene-bg").className = "diner";
+    forceSceneBg("diner");
     $("#scene-title").textContent = "Neon Diner";
     addSprite("char-waitress.png", "waitress");
     maybeStalkShady("diner");
@@ -1994,6 +2054,7 @@
         { label: "Pocket something without paying", fn: () => {
           change("heat", 12);
           addOrStack({ id: "keychain", name: "State Keychain", desc: "Stolen", qty: 1 });
+          shiftAlign(-8, "Stole from the gift shelf");
           toast("Stolen keychain. Heat way up.");
         }}
       ])},
@@ -2244,7 +2305,7 @@
   function enterTwinLakes() {
     if (!state.flags.visitedTwin) { state.flags.visitedTwin = true; state.statesVisited++; }
     clearSprites();
-    $("#scene-bg").className = "twinlakes";
+    forceSceneBg("twinlakes");
     $("#scene-title").textContent = "Twin Lakes Overlook";
     const hs = $("#hotspots");
     hs.innerHTML = "";
@@ -2292,10 +2353,148 @@
     ensurePlayerSprite();
   }
 
+
+    function forceSceneBg(bgClass) {
+    const bg = $("#scene-bg");
+    if (!bg) return;
+    const bgMap = {
+      mall: "bg-mall-v2.jpg",
+      gas: "bg-gas.jpg",
+      museum: "bg-museum-v2.jpg",
+      city: "bg-city-v2.jpg",
+      campground: "bg-campground.jpg",
+      reststop: "bg-reststop.jpg",
+      diner: "bg-diner.jpg",
+      forest: "bg-forest.jpg",
+      twinlakes: "bg-twinlakes.jpg",
+      highway: "bg-highway.jpg"
+    };
+    const url = bgMap[bgClass] || ("bg-" + bgClass + ".jpg");
+    // Strip all scene classes so CSS cannot override with wrong art
+    bg.className = "";
+    bg.removeAttribute("class");
+    bg.style.cssText = "";
+    bg.style.setProperty("background-image", 'url("' + url + '")', "important");
+    bg.style.setProperty("background-size", "cover", "important");
+    bg.style.setProperty("background-position", "center", "important");
+    bg.style.setProperty("background-repeat", "no-repeat", "important");
+    bg.style.setProperty("position", "absolute", "important");
+    bg.style.setProperty("inset", "0", "important");
+    bg.style.setProperty("width", "100%", "important");
+    bg.style.setProperty("height", "100%", "important");
+    // Debug badge so we can see which file was requested
+    let badge = document.getElementById("bg-debug");
+    if (!badge) {
+      badge = document.createElement("div");
+      badge.id = "bg-debug";
+      badge.style.cssText = "position:absolute;left:8px;bottom:8px;z-index:50;background:rgba(0,0,0,0.7);color:#0f0;font:11px monospace;padding:4px 8px;border-radius:6px;pointer-events:none;";
+      const stage = $("#scene-stage") || document.body;
+      stage.appendChild(badge);
+    }
+    badge.textContent = "BG: " + url;
+    // Preload verify
+    const test = new Image();
+    test.onload = () => { badge.textContent = "BG OK: " + url; badge.style.color = "#8f8"; };
+    test.onerror = () => {
+      badge.textContent = "BG MISSING: " + url + " (upload part1 images!)";
+      badge.style.color = "#f66";
+      toast("Missing background: " + url);
+    };
+    test.src = url;
+  }
+
+
+  function enterGenericScene(bgClass, title, spots, playerX, sprites) {
+    clearSprites();
+    forceSceneBg(bgClass);
+    $("#scene-title").textContent = title;
+    maybeStalkShady(title);
+    const hs = $("#hotspots");
+    hs.innerHTML = "";
+    spots.forEach(h => hs.appendChild(makeHotspot(h)));
+    // Also place NPC sprites from hotspot images for depth
+    (sprites || []).forEach(s => addSprite(s.src, s.cls));
+    show("scene");
+    state.playerX = playerX || 40;
+    ensureWalkLayer();
+    ensurePlayerSprite();
+  }
+
+  function enterMall() {
+    enterGenericScene("mall", "Mall Corridor", [
+      { label: "Food Court", style: "left:6%;bottom:8%;width:24%;height:46%;", important: true, img: "char-hippie.png", action: () => {
+        say("Food Court", dynLine("Court", ["Grease, neon, and regret. Meals from $8.", "Day {day} and the food court still smells like hope."]), [
+          { label: "Buy family meal ($18)", fn: () => { if (state.resources.money >= 18) { change("money", -18); change("food", 25); change("morale", 6); shiftAlign(2, "Fed the family"); } else toast("Broke."); } },
+          { label: "Talk to hippie vendor", fn: () => talkDynamicNPC("hippie") },
+          { label: "Leave", fn: () => {} }
+        ]);
+      }, x: 16 },
+      { label: "Kiosk Vendor", style: "left:36%;bottom:8%;width:22%;height:46%;", important: true, img: "char-business.png", action: () => talkDynamicNPC("business"), x: 44 },
+      { label: "Shady Corner", style: "left:62%;bottom:10%;width:18%;height:44%;", img: "char-villain.png", action: () => talkDynamicNPC("villain"), x: 70 },
+      { label: "Sell Junk", style: "left:82%;bottom:12%;width:16%;height:30%;", action: () => openSellMenu("Mall Buyer"), x: 86 },
+      { label: "Exit", style: "left:40%;bottom:1%;width:20%;height:11%;", action: () => show("hub"), x: 50 }
+    ], 28, []);
+  }
+
+  function enterGasStation() {
+    enterGenericScene("gas", "Gas Station", [
+      { label: "Pump", style: "left:8%;bottom:10%;width:24%;height:40%;", important: true, action: () => {
+        say("Pump", "Gas is pricey. Tank looks thirsty.", [
+          { label: "Fill up ($25)", fn: () => { if (state.resources.money >= 25) { change("money", -25); change("gas", 40); toast("Tank happier."); } else toast("Not enough."); } },
+          { label: "Partial ($12)", fn: () => { if (state.resources.money >= 12) { change("money", -12); change("gas", 18); } else toast("Nope."); } },
+          { label: "Leave", fn: () => {} }
+        ]);
+      }, x: 16 },
+      { label: "Clerk", style: "left:36%;bottom:8%;width:22%;height:46%;", important: true, img: "char-business.png", action: () => {
+        say("Clerk", dynLine("Clerk", ["Bathroom code is on the receipt. Don't ask twice.", "We buy scrap. We sell regret."]), [
+          { label: "Buy snacks ($6)", fn: () => { if (state.resources.money >= 6) { change("money", -6); addOrStack({ id: "snacks", name: "Road Snacks", qty: 2 }); change("food", 5); } else toast("Broke."); } },
+          { label: "Sell junk", fn: () => openSellMenu("Clerk") },
+          { label: "Ask about work", fn: () => doLabor("gas") },
+          { label: "Leave", fn: () => {} }
+        ]);
+      }, x: 44 },
+      { label: "Lot Hobo", style: "left:62%;bottom:6%;width:20%;height:48%;", img: "char-hobo.png", action: () => talkDynamicNPC("hobo"), x: 70 },
+      { label: "Other Family", style: "left:82%;bottom:10%;width:16%;height:40%;", img: "char-rival-family.png", action: () => talkDynamicNPC("family"), x: 88 },
+      { label: "Leave", style: "left:40%;bottom:1%;width:20%;height:11%;", action: () => show("hub"), x: 50 }
+    ], 28, []);
+  }
+
+  function enterMuseum() {
+    enterGenericScene("museum", "Local Museum", [
+      { label: "Exhibits", style: "left:10%;bottom:12%;width:28%;height:42%;", important: true, action: () => {
+        say("Exhibit", dynLine("Plaque", ["Local legend says a camper once vanished here. Probably marketing.", "Artifacts: a boot, a map, three lies."]), [
+          { label: "Pay admission ($5)", fn: () => { if (state.resources.money >= 5) { change("money", -5); change("morale", 8, "Culture!"); shiftAlign(3, "Supported the museum"); } else toast("Can't afford culture."); } },
+          { label: "Sneak in", fn: () => { change("heat", 8); change("morale", 3, "Free and nervy."); shiftAlign(-6, "Sneaked into museum"); } },
+          { label: "Leave", fn: () => {} }
+        ]);
+      }, x: 20 },
+      { label: "Docent", style: "left:42%;bottom:8%;width:22%;height:48%;", important: true, img: "char-business.png", action: () => talkDynamicNPC("business"), x: 50 },
+      { label: "Weird Patron", style: "left:68%;bottom:8%;width:20%;height:48%;", img: "char-villain.png", action: () => talkDynamicNPC("villain"), x: 76 },
+      { label: "Gift Desk", style: "left:6%;bottom:8%;width:18%;height:30%;", action: () => openSellMenu("Museum Desk"), x: 12 },
+      { label: "Exit", style: "left:40%;bottom:1%;width:20%;height:11%;", action: () => show("hub"), x: 50 }
+    ], 30, []);
+  }
+
+  function enterCity() {
+    enterGenericScene("city", "City Streets", [
+      { label: "Street Musician", style: "left:6%;bottom:8%;width:24%;height:48%;", important: true, img: "char-hippie.png", action: () => talkDynamicNPC("hippie"), x: 16 },
+      { label: "Corner Hobo", style: "left:32%;bottom:6%;width:22%;height:46%;", img: "char-hobo.png", action: () => talkDynamicNPC("hobo"), x: 40 },
+      { label: "Business Lunch", style: "left:56%;bottom:8%;width:20%;height:44%;", img: "char-business.png", action: () => talkDynamicNPC("business"), x: 64 },
+      { label: "Alley Deal", style: "left:78%;bottom:10%;width:18%;height:46%;", important: true, img: "char-villain.png", action: () => {
+        say("Alley", "Someone wants to buy 'whatever fell off a truck.'", [
+          { label: "Sell stolen-ish junk", fn: () => { shiftAlign(-7, "Fenced goods"); openSellMenu("Fence"); change("heat", 6); } },
+          { label: "Talk to them", fn: () => talkDynamicNPC("villain") },
+          { label: "Back out", fn: () => shiftAlign(2, "Walked away from a bad deal") }
+        ]);
+      }, x: 84 },
+      { label: "Leave Town", style: "left:40%;bottom:1%;width:20%;height:11%;", action: () => show("hub"), x: 50 }
+    ], 28, []);
+  }
+
   function enterBluegrass() {
     if (!state.flags.visitedBluegrass) { state.flags.visitedBluegrass = true; state.statesVisited++; }
     clearSprites();
-    $("#scene-bg").className = "reststop";
+    forceSceneBg("reststop");
     $("#scene-title").textContent = "Bluegrass Welcome Center";
     addSprite("char-rusty.png", "rusty");
     const hs = $("#hotspots");
@@ -2351,7 +2550,7 @@
   const imgPicnic = new Image();
   imgPicnic.src = "bg-picnic-fp.jpg";
   const imgDrive = new Image();
-  imgDrive.src = "bg-drive-fp.jpg";
+  imgDrive.src = "bg-drive-overhead-v2.jpg";
 
   const spit = { running: false, raf: null, score: 0, ammo: 12, targets: [], lastT: 0, time: 20 };
 
@@ -2382,7 +2581,7 @@
     spit.running = true;
     spit.score = 0;
     spit.ammo = Math.min(12, state.inventory.find(i => i.id === "spitballs")?.qty || 0);
-    spit.time = state.difficulty === "hard" ? 14 : (state.difficulty === "easy" ? 25 : 20);
+    spit.time = 30;
     spit.targets = [
       { x: 0.32, y: 0.48, w: 0.14, hit: 0, name: "Dad" },
       { x: 0.50, y: 0.46, w: 0.12, hit: 0, name: "Mom" },
@@ -2413,6 +2612,18 @@
           t.hit++;
           spit.score++;
           hit = true;
+          const lines = [
+            "Hey! Cut it out!",
+            "Who's doing that?!",
+            "Ow — spitball?!",
+            "Kids these days!",
+            "I'm calling the ranger!",
+            "You little—!",
+            "Not the sandwich!"
+          ];
+          showCallout(lines[Math.floor(Math.random()*lines.length)]);
+          // flinch
+          t.shake = 0.4;
         }
       });
       if (!hit) {
@@ -2470,6 +2681,20 @@
     spit.raf = requestAnimationFrame(loop);
   }
 
+  function showCallout(text) {
+    let el = document.getElementById("drive-callout");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "drive-callout";
+      const stage = document.getElementById("screen-drive") || document.body;
+      stage.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(showCallout._t);
+    showCallout._t = setTimeout(() => el.classList.remove("show"), 1200);
+  }
+
   function drawSpitball(canvas) {
     const ctx = canvas.getContext("2d");
     const w = canvas.width, h = canvas.height;
@@ -2489,19 +2714,33 @@
     ctx.fillRect(0, h * 0.65, w, h * 0.35);
 
     // Target rings over each picnic person
-    spit.targets.forEach(t => {
+    spit.targets.forEach((t, i) => {
+      let tx = t.x, ty = t.y;
+      if (t.shake && t.shake > 0) {
+        tx += (Math.random() - 0.5) * 0.02;
+        ty += (Math.random() - 0.5) * 0.02;
+        t.shake -= 0.016;
+      }
+      if (spit.runningOff) {
+        // scatter off screen
+        tx += (i - 1) * 0.08;
+        ty -= 0.05;
+      }
       if (t.hit >= 3) {
-        // KO marker
-        ctx.globalAlpha = 0.7;
+        ctx.globalAlpha = 0.55;
         ctx.strokeStyle = "#e74c3c";
         ctx.lineWidth = 3;
         const r = t.w * w * 0.5;
         ctx.beginPath();
-        ctx.moveTo(t.x * w - r, t.y * h - r);
-        ctx.lineTo(t.x * w + r, t.y * h + r);
-        ctx.moveTo(t.x * w + r, t.y * h - r);
-        ctx.lineTo(t.x * w - r, t.y * h + r);
+        ctx.moveTo(tx * w - r, ty * h - r);
+        ctx.lineTo(tx * w + r, ty * h + r);
+        ctx.moveTo(tx * w + r, ty * h - r);
+        ctx.lineTo(tx * w - r, ty * h + r);
         ctx.stroke();
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold " + Math.max(11, h * 0.025) + "px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("!!", tx * w, ty * h);
         ctx.globalAlpha = 1;
         return;
       }
@@ -2510,13 +2749,12 @@
       ctx.strokeStyle = t.hit > 0 ? "rgba(240,180,41," + pulse + ")" : "rgba(255,255,255," + (0.45 + pulse * 0.35) + ")";
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(t.x * w, t.y * h, r, 0, Math.PI * 2);
+      ctx.arc(tx * w, ty * h, r, 0, Math.PI * 2);
       ctx.stroke();
-      // hit pips
       ctx.fillStyle = "#fff";
       ctx.font = "bold " + Math.max(12, h * 0.028) + "px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(t.hit + "/3", t.x * w, t.y * h - r - 6);
+      ctx.fillText(t.hit + "/3", tx * w, ty * h - r - 6);
     });
     ctx.textAlign = "left";
 
@@ -2556,19 +2794,28 @@
 
     state.flags.picnicDone = true;
     change("heat", 4 + Math.floor(spit.score / 2));
+    if (spit.score >= 3) shiftAlign(-4, "Spitball ambush");
+
     if (spit.score >= 6) {
-      change("morale", 12, "Direct hits! The picnic scatters.");
-      change("money", 3, "Someone dropped loose change running.");
+      change("morale", 14, "They grab the blanket and sprint into the trees.");
+      change("money", 5, "Coins bounce off the path as they run.");
+      showCallout("We're outta here!!");
     } else if (spit.score >= 3) {
-      change("morale", 6, "A few solid hits. They look annoyed.");
+      change("morale", 7, "Angry shouting, then a hurried pack-up.");
+      showCallout("Let's GO. Now!");
     } else {
-      change("morale", -2, "Weak showing. They barely noticed.");
+      change("morale", -2, "They glare, then decide you aren't worth it.");
+      showCallout("Whatever. Pack it up.");
     }
-    show("hub");
-    log("Spitball picnic ambush: " + spit.score + " hits.");
-    say("Ambush Over", "Hits: " + spit.score + ". Heat is up. Time to leave before they find the log.", [
-      { label: "Back to camper", fn: () => {} }
-    ]);
+    // short run-off animation flag
+    spit.runningOff = true;
+    setTimeout(() => {
+      show("hub");
+      log("Spitball picnic ambush: " + spit.score + " hits. Family ran off.");
+      say("Ambush Over", "Hits: " + spit.score + ". The rival family bolted with their picnic. Heat is up — move before a ranger asks questions.", [
+        { label: "Back to camper", fn: () => {} }
+      ]);
+    }, 900);
   }
 
   // ---------- DRIVING MINI-GAME ----------
@@ -2787,89 +3034,103 @@
   function drawDrive(canvas) {
     const ctx = canvas.getContext("2d");
     const w = canvas.width, h = canvas.height;
-    // Claymation dashboard POV
+    // Overhead clay road
     if (imgDrive.complete && imgDrive.naturalWidth) {
-      ctx.drawImage(imgDrive, 0, 0, w, h);
+      // scroll background slightly with roadOffset
+      const off = (drive.roadOffset || 0) % h;
+      ctx.drawImage(imgDrive, 0, off - h, w, h);
+      ctx.drawImage(imgDrive, 0, off, w, h);
     } else {
-      ctx.fillStyle = "#5a7a9a";
+      ctx.fillStyle = "#3d6b3d";
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = "#444";
-      ctx.fillRect(w * 0.2, h * 0.35, w * 0.6, h * 0.4);
+      ctx.fillRect(w * 0.28, 0, w * 0.44, h);
     }
 
-    // Scroll vignette / speed feel
-    const speedFlash = Math.min(1, drive.speed / 2) * 0.08;
-    ctx.fillStyle = "rgba(255,255,255," + speedFlash + ")";
-    ctx.fillRect(0, 0, w, h);
+    // Lane guides (3 lanes overhead)
+    const laneCenters = [0.36, 0.50, 0.64];
+    ctx.strokeStyle = "rgba(255,220,80,0.35)";
+    ctx.setLineDash([12, 16]);
+    ctx.lineWidth = 3;
+    laneCenters.forEach(lc => {
+      ctx.beginPath();
+      ctx.moveTo(lc * w, 0);
+      ctx.lineTo(lc * w, h);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
 
-    const laneCenters = [0.35, 0.50, 0.65];
-    // Obstacles as clay cars approaching
+    // Obstacles top-down cars
     drive.obstacles.forEach(o => {
       if (o.hit) return;
       const cx = laneCenters[o.lane] * w;
-      const scale = 0.25 + o.y * 0.75;
-      const cw = w * 0.12 * scale;
-      const ch = h * 0.08 * scale;
-      const cy = h * (0.32 + o.y * 0.38);
+      const cy = o.y * h;
+      const cw = w * 0.09;
+      const ch = h * 0.11;
+      const colors = ["#c0392b", "#2980b9", "#f1c40f", "#8e44ad", "#e67e22"];
       // shadow
       ctx.fillStyle = "rgba(0,0,0,0.25)";
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + ch * 0.55, cw * 0.55, ch * 0.18, 0, 0, Math.PI * 2);
+      roundRect(ctx, cx - cw/2 + 3, cy - ch/2 + 4, cw, ch, 8);
       ctx.fill();
-      // body
-      const colors = ["#c0392b", "#2980b9", "#27ae60", "#8e44ad", "#d35400"];
       ctx.fillStyle = colors[o.lane % colors.length];
-      roundRect(ctx, cx - cw/2, cy - ch/2, cw, ch, 6 * scale);
+      roundRect(ctx, cx - cw/2, cy - ch/2, cw, ch, 8);
       ctx.fill();
-      // windshield
-      ctx.fillStyle = "rgba(180,220,255,0.7)";
-      roundRect(ctx, cx - cw * 0.35, cy - ch * 0.35, cw * 0.7, ch * 0.35, 3 * scale);
+      // windshield top
+      ctx.fillStyle = "rgba(180,220,255,0.75)";
+      roundRect(ctx, cx - cw * 0.32, cy - ch * 0.42, cw * 0.64, ch * 0.28, 4);
       ctx.fill();
       // wheels
       ctx.fillStyle = "#222";
-      ctx.beginPath();
-      ctx.arc(cx - cw * 0.28, cy + ch * 0.4, ch * 0.18, 0, Math.PI * 2);
-      ctx.arc(cx + cw * 0.28, cy + ch * 0.4, ch * 0.18, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(cx - cw/2 - 3, cy - ch * 0.28, 5, ch * 0.2);
+      ctx.fillRect(cx + cw/2 - 2, cy - ch * 0.28, 5, ch * 0.2);
+      ctx.fillRect(cx - cw/2 - 3, cy + ch * 0.08, 5, ch * 0.2);
+      ctx.fillRect(cx + cw/2 - 2, cy + ch * 0.08, 5, ch * 0.2);
     });
 
-    // Cops
     (drive.cops || []).forEach(c => {
       const cx = laneCenters[c.lane] * w;
-      const scale = 0.3 + c.y * 0.7;
-      const cw = w * 0.13 * scale;
-      const ch = h * 0.09 * scale;
-      const cy = h * (0.32 + c.y * 0.38);
+      const cy = c.y * h;
+      const cw = w * 0.1, ch = h * 0.12;
       ctx.fillStyle = "#1a1a2e";
-      roundRect(ctx, cx - cw/2, cy - ch/2, cw, ch, 5);
+      roundRect(ctx, cx - cw/2, cy - ch/2, cw, ch, 8);
       ctx.fill();
-      ctx.fillStyle = "#3498db";
-      ctx.fillRect(cx - cw/2, cy - ch/2, cw, ch * 0.18);
-      // light
-      ctx.fillStyle = Math.sin(Date.now()/100) > 0 ? "#e74c3c" : "#3498db";
+      ctx.fillStyle = Math.sin(Date.now()/80) > 0 ? "#e74c3c" : "#3498db";
       ctx.beginPath();
-      ctx.arc(cx, cy - ch * 0.55, ch * 0.15, 0, Math.PI * 2);
+      ctx.arc(cx, cy - ch * 0.35, 6, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    // Lane indicator arrows over dash
-    const laneX = laneCenters[drive.lane] * w;
-    ctx.fillStyle = "rgba(240,180,41,0.85)";
-    ctx.beginPath();
-    ctx.moveTo(laneX, h * 0.72);
-    ctx.lineTo(laneX - w * 0.03, h * 0.76);
-    ctx.lineTo(laneX + w * 0.03, h * 0.76);
-    ctx.closePath();
+    // Player camper (overhead gold)
+    const pcx = laneCenters[drive.lane] * w;
+    const pcy = h * 0.78;
+    const pw = w * 0.11, ph = h * 0.14;
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    roundRect(ctx, pcx - pw/2 + 4, pcy - ph/2 + 5, pw, ph, 10);
     ctx.fill();
+    ctx.fillStyle = "#f0b429";
+    roundRect(ctx, pcx - pw/2, pcy - ph/2, pw, ph, 10);
+    ctx.fill();
+    ctx.fillStyle = "#2c3e50";
+    roundRect(ctx, pcx - pw * 0.3, pcy - ph * 0.4, pw * 0.6, ph * 0.35, 4);
+    ctx.fill();
+    // roof luggage
+    ctx.fillStyle = "#8e5a3a";
+    ctx.fillRect(pcx - pw * 0.25, pcy - ph * 0.48, pw * 0.5, ph * 0.1);
 
-    // Hit flash
-    if (drive.hits > 0 && Date.now() % 200 < 100 && drive.hits >= drive.maxHits - 1) {
-      ctx.fillStyle = "rgba(231,76,60,0.2)";
-      ctx.fillRect(0, 0, w, h);
+    // speed lines when boosting
+    if (drive.speed > 1.3) {
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
+      for (let i = 0; i < 8; i++) {
+        const lx = Math.random() * w;
+        ctx.beginPath();
+        ctx.moveTo(lx, Math.random() * h);
+        ctx.lineTo(lx, Math.random() * h * 0.3 + h * 0.2);
+        ctx.stroke();
+      }
     }
 
     // HUD
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
     ctx.fillRect(0, 0, w, h * 0.09);
     ctx.fillStyle = "#fff";
     ctx.font = "bold " + Math.max(13, h * 0.035) + "px sans-serif";
@@ -2890,89 +3151,99 @@
   }
 
 
-  function enterGenericScene(bgClass, title, spots, playerX) {
-    clearSprites();
-    $("#scene-bg").className = bgClass;
-    $("#scene-title").textContent = title;
-    maybeStalkShady(title);
-    const hs = $("#hotspots");
-    hs.innerHTML = "";
-    spots.forEach(h => hs.appendChild(makeHotspot(h)));
-    show("scene");
-    state.playerX = playerX || 40;
-    ensureWalkLayer();
-    ensurePlayerSprite();
+  // ---------- SAVE SLOTS ----------
+  let activeSlot = 0;
+  const SAVE_KEY = "camperQuestSaves_v1";
+
+  function loadSaveTable() {
+    try {
+      return JSON.parse(localStorage.getItem(SAVE_KEY) || "[null,null,null]");
+    } catch (e) { return [null, null, null]; }
   }
 
-  function enterMall() {
-    enterGenericScene("diner", "Mall Corridor", [
-      { label: "Food Court", style: "left:8%;bottom:10%;width:24%;height:40%;", important: true, action: () => {
-        say("Food Court", dynLine("Court", ["Grease, neon, and regret. Meals from $8."]), [
-          { label: "Buy family meal ($18)", fn: () => { if (state.resources.money >= 18) { change("money", -18); change("food", 25); change("morale", 6); } else toast("Broke."); } },
-          { label: "Talk to hippie vendor", fn: () => talkDynamicNPC("hippie") },
-          { label: "Leave", fn: () => {} }
-        ]);
-      }, x: 16 },
-      { label: "Kiosk Vendor", style: "left:38%;bottom:14%;width:22%;height:36%;", important: true, action: () => talkDynamicNPC("business"), x: 48 },
-      { label: "Sell Junk", style: "left:62%;bottom:12%;width:20%;height:30%;", action: () => openSellMenu("Mall Buyer"), x: 70 },
-      { label: "Shady Corner", style: "left:78%;bottom:20%;width:18%;height:34%;", action: () => talkDynamicNPC("villain"), x: 84 },
-      { label: "Exit", style: "left:40%;bottom:2%;width:20%;height:12%;", action: () => show("hub"), x: 50 }
-    ], 30);
+  function writeSaveTable(table) {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(table));
   }
 
-  function enterGasStation() {
-    enterGenericScene("reststop", "Gas Station", [
-      { label: "Pump", style: "left:10%;bottom:12%;width:22%;height:36%;", important: true, action: () => {
-        say("Pump", "Gas is pricey. Tank looks thirsty.", [
-          { label: "Fill up ($25)", fn: () => { if (state.resources.money >= 25) { change("money", -25); change("gas", 40); toast("Tank happier."); } else toast("Not enough."); } },
-          { label: "Partial ($12)", fn: () => { if (state.resources.money >= 12) { change("money", -12); change("gas", 18); } else toast("Nope."); } },
-          { label: "Leave", fn: () => {} }
-        ]);
-      }, x: 18 },
-      { label: "Clerk", style: "left:40%;bottom:10%;width:22%;height:40%;", important: true, action: () => {
-        say("Clerk", dynLine("Clerk", ["Bathroom code is on the receipt. Don't ask twice.", "We buy scrap. We sell regret."]), [
-          { label: "Buy snacks ($6)", fn: () => { if (state.resources.money >= 6) { change("money", -6); addOrStack({ id: "snacks", name: "Road Snacks", qty: 2 }); change("food", 5); } else toast("Broke."); } },
-          { label: "Sell junk", fn: () => openSellMenu("Clerk") },
-          { label: "Ask about work", fn: () => doLabor("gas") },
-          { label: "Leave", fn: () => {} }
-        ]);
-      }, x: 48 },
-      { label: "Lot Hobo", style: "left:68%;bottom:14%;width:20%;height:36%;", action: () => talkDynamicNPC("hobo"), x: 76 },
-      { label: "Other Family", style: "left:5%;top:20%;width:22%;height:28%;", action: () => talkDynamicNPC("family"), x: 14 },
-      { label: "Leave", style: "left:40%;bottom:2%;width:20%;height:12%;", action: () => show("hub"), x: 50 }
-    ], 28);
+  function slotLabel(data, i) {
+    if (!data) return "Slot " + (i + 1) + " — Empty";
+    const name = data.familyName || data.playerRole || "Family";
+    return "Slot " + (i + 1) + " — " + name + " · Day " + (data.day || 1) + " · " + (data.currentState || "TN");
   }
 
-  function enterMuseum() {
-    enterGenericScene("twinlakes", "Local Museum", [
-      { label: "Exhibits", style: "left:12%;bottom:14%;width:28%;height:40%;", important: true, action: () => {
-        say("Exhibit", dynLine("Plaque", ["Local legend says a camper once vanished here. Probably marketing.", "Artifacts: a boot, a map, three lies."]), [
-          { label: "Pay admission ($5)", fn: () => { if (state.resources.money >= 5) { change("money", -5); change("morale", 8, "Culture!"); } else toast("Can't afford culture."); } },
-          { label: "Sneak in", fn: () => { change("heat", 8); change("morale", 3, "Free and nervy."); } },
-          { label: "Leave", fn: () => {} }
-        ]);
-      }, x: 22 },
-      { label: "Docent", style: "left:48%;bottom:12%;width:22%;height:38%;", important: true, action: () => talkDynamicNPC("business"), x: 56 },
-      { label: "Gift Desk", style: "left:72%;bottom:16%;width:20%;height:32%;", action: () => openSellMenu("Museum Desk"), x: 80 },
-      { label: "Weird Patron", style: "left:8%;top:22%;width:20%;height:26%;", action: () => talkDynamicNPC("villain"), x: 16 },
-      { label: "Exit", style: "left:40%;bottom:2%;width:20%;height:12%;", action: () => show("hub"), x: 50 }
-    ], 35);
+  function refreshSlotButtons() {
+    const table = loadSaveTable();
+    document.querySelectorAll(".save-slot").forEach(btn => {
+      const i = parseInt(btn.dataset.slot, 10);
+      btn.textContent = slotLabel(table[i], i);
+      btn.classList.toggle("selected", i === activeSlot);
+      btn.classList.toggle("has-data", !!table[i]);
+    });
   }
 
-  function enterCity() {
-    enterGenericScene("campground", "City Streets", [
-      { label: "Street Musician", style: "left:10%;bottom:12%;width:22%;height:38%;", important: true, action: () => talkDynamicNPC("hippie"), x: 18 },
-      { label: "Corner Hobo", style: "left:36%;bottom:10%;width:22%;height:36%;", action: () => talkDynamicNPC("hobo"), x: 44 },
-      { label: "Business Lunch", style: "left:60%;bottom:14%;width:22%;height:34%;", action: () => talkDynamicNPC("business"), x: 68 },
-      { label: "Alley Deal", style: "left:78%;bottom:20%;width:18%;height:32%;", important: true, action: () => {
-        say("Alley", "Someone wants to buy 'whatever fell off a truck.'", [
-          { label: "Sell stolen-ish junk", fn: () => { openSellMenu("Fence"); change("heat", 6); } },
-          { label: "Talk to them", fn: () => talkDynamicNPC("villain") },
-          { label: "Back out", fn: () => {} }
-        ]);
-      }, x: 84 },
-      { label: "Leave Town", style: "left:40%;bottom:2%;width:22%;height:12%;", action: () => show("hub"), x: 50 }
-    ], 30);
+  function saveGame() {
+    const table = loadSaveTable();
+    const snap = {
+      day: state.day,
+      dayLabel: state.dayLabel,
+      playerRole: state.playerRole,
+      playerPersonality: state.playerPersonality,
+      playerHair: state.playerHair,
+      playerSkin: state.playerSkin,
+      playerHeight: state.playerHeight,
+      playerWeight: state.playerWeight,
+      familySize: state.familySize,
+      difficulty: state.difficulty,
+      family: state.family,
+      resources: state.resources,
+      alignment: state.alignment,
+      inventory: state.inventory,
+      flags: state.flags,
+      statesVisited: state.statesVisited,
+      currentState: state.currentState,
+      unlockedStates: state.unlockedStates,
+      familyName: state.familyName || "",
+      playerOutfit: state.playerOutfit || "casual",
+      savedAt: Date.now()
+    };
+    table[activeSlot] = snap;
+    writeSaveTable(table);
+    toast("Saved to Slot " + (activeSlot + 1));
+    refreshSlotButtons();
+  }
+
+  function loadGame(slot) {
+    const table = loadSaveTable();
+    const data = table[slot];
+    if (!data) { toast("Slot empty."); return false; }
+    activeSlot = slot;
+    Object.assign(state, {
+      day: data.day,
+      dayLabel: data.dayLabel,
+      playerRole: data.playerRole,
+      playerPersonality: data.playerPersonality,
+      playerHair: data.playerHair,
+      playerSkin: data.playerSkin,
+      playerHeight: data.playerHeight,
+      playerWeight: data.playerWeight,
+      familySize: data.familySize,
+      difficulty: data.difficulty,
+      family: data.family,
+      resources: data.resources,
+      alignment: data.alignment || 0,
+      inventory: data.inventory,
+      flags: data.flags,
+      statesVisited: data.statesVisited,
+      currentState: data.currentState,
+      unlockedStates: data.unlockedStates,
+      familyName: data.familyName,
+      playerOutfit: data.playerOutfit
+    });
+    startMusic();
+    show("hub");
+    updateHub();
+    toast("Loaded Slot " + (slot + 1));
+    return true;
   }
 
   // ---------- WIRE UP ----------
@@ -2981,7 +3252,27 @@
     $("#player-role").addEventListener("change", buildFamilySetupUI);
     buildFamilySetupUI();
 
+    refreshSlotButtons();
+    document.querySelectorAll(".save-slot").forEach(btn => {
+      btn.onclick = () => {
+        activeSlot = parseInt(btn.dataset.slot, 10);
+        refreshSlotButtons();
+      };
+    });
     $("#btn-start").onclick = () => { startMusic(); show("family"); };
+    const cont = $("#btn-continue");
+    if (cont) cont.onclick = () => {
+      if (!loadGame(activeSlot)) toast("Pick a slot that has a save.");
+    };
+    // save button on hub if missing
+    if (!$("#btn-save") && $("#btn-depart")) {
+      const sb = document.createElement("button");
+      sb.id = "btn-save";
+      sb.className = "btn secondary";
+      sb.textContent = "Save Game";
+      sb.onclick = () => saveGame();
+      $("#btn-depart").parentNode.appendChild(sb);
+    }
     const musBtn = $("#btn-music");
     if (musBtn) musBtn.onclick = () => toggleMusic();
     const skipBtn = $("#btn-family-skip");

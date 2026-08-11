@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Camper Quest</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=20260811b">
 </head>
 <body>
   <div id="app">
@@ -13,8 +13,15 @@
     <section id="screen-title" class="screen active">
       <div class="title-content">
         <h1>Camper Quest</h1>
+        <p id="build-ver" style="color:#c9a86c;font-size:0.85rem;margin:0 0 8px;">Build 2026-08-11b · FIXED BGs · saves · align · loud music</p>
         <img src="camper.png" alt="Claymation Camper" class="title-camper">
-        <button id="btn-start" class="btn primary">Start Road Trip</button>
+        <div id="save-slots" class="save-slots">
+          <button class="btn save-slot" data-slot="0">Slot 1 — Empty</button>
+          <button class="btn save-slot" data-slot="1">Slot 2 — Empty</button>
+          <button class="btn save-slot" data-slot="2">Slot 3 — Empty</button>
+        </div>
+        <button id="btn-start" class="btn primary">New Game (selected slot)</button>
+        <button id="btn-continue" class="btn secondary">Continue Slot</button>
         <button id="btn-music" class="btn secondary" style="margin-top:8px;">♪ Music: On</button>
       </div>
     </section>
@@ -22,6 +29,14 @@
     <section id="screen-family" class="screen">
       <h2>Build Your Family</h2>
       <div class="card family-card">
+        <label>Difficulty: <span style="color:#e74c3c">* required</span>
+          <select id="difficulty" required>
+            <option value="" selected disabled>Choose difficulty…</option>
+            <option value="easy">Easy — can't lose · 3 hits allowed</option>
+            <option value="medium">Medium — can fail · 2 hits allowed</option>
+            <option value="hard">Hard — tough · 1 hit fails the drive</option>
+          </select>
+        </label>
         <label>You are the:
           <select id="player-role">
             <option value="Older Sister">Older Sister</option>
@@ -83,16 +98,8 @@
             <option value="6">6</option>
           </select>
         </label>
-        <label>Difficulty: <span style="color:#e74c3c">* required</span>
-          <select id="difficulty" required>
-            <option value="" selected disabled>Choose difficulty…</option>
-            <option value="easy">Easy — can't lose · 3 hits allowed</option>
-            <option value="medium">Medium — can fail · 2 hits allowed</option>
-            <option value="hard">Hard — tough · 1 hit fails the drive</option>
-          </select>
-        </label>
         <div id="family-members-setup"></div>
-        <p class="hint">Same personality options for everyone. Appearance is saved for your character.</p>
+        <p class="hint">Only you pick a personality. Everyone else gets a random one. Family looks similar to you.</p>
       </div>
       <label>Outfit vibe:
         <select id="player-outfit">
@@ -121,6 +128,7 @@
         <div class="res"><span>😊</span><b id="res-morale">70</b></div>
         <div class="res"><span>🚨</span><b id="res-heat">0</b></div>
         <div class="res"><span>❤️</span><b id="res-hp">100</b></div>
+        <div class="res"><span>⚖️</span><b id="res-align">Neutral</b></div>
       </div>
       <div id="family-health" class="family-health"></div>
       <div id="family-line" class="family-line"></div>
@@ -209,6 +217,6 @@
 
     <div id="toast" class="toast hidden"></div>
   </div>
-  <script src="game.js"></script>
+  <script src="game.js?v=20260811b"></script>
 </body>
 </html>
