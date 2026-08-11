@@ -381,9 +381,9 @@
     const nm = t.name;
     let line = dynLine(nm, t.lines);
     const a = state.alignment || 0;
-    if (type === "villain" && a >= 40) line += " They squint. "You smell like a goody-goody."";
-    if (type === "villain" && a <= -40) line += " A nod. "Heard of you. Not all bad — our kind of not-bad."";
-    if (type === "hobo" && a >= 30) line += " "You're one of the decent ones."";
+    if (type === "villain" && a >= 40) line += ' They squint. "You smell like a goody-goody."';
+    if (type === "villain" && a <= -40) line += ' A nod. "Heard of you. Not all bad — our kind of not-bad."';
+    if (type === "hobo" && a >= 30) line += ' "You\'re one of the decent ones."';
     if (type === "hobo" && a <= -30) line += " They edge away a little.";
     if (type === "family" && a <= -50) line += " The parents pull the kids closer.";
     say(nm, line, t.choices(nm));
@@ -453,7 +453,7 @@
     });
   }
 
-  function buildFamilyfunction buildFamilyfunction buildFamily() {
+  function buildFamily() {
     state.playerRole = $("#player-role").value;
     state.playerPersonality = $("#player-personality").value;
     state.playerHair = $("#player-hair").value;
@@ -470,7 +470,6 @@
       maxHp: 100,
       status: "ok" // ok | arrested | lost
     }];
-    const persKeys = Object.keys(personalities);
     const selects = []; // personalities randomized below
     // Non-player members: roles from setup labels, personalities random
     const labels = $$(".member-role-label");
