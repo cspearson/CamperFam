@@ -1730,7 +1730,7 @@
 
   function makeHotspot(h) {
     const el = document.createElement("div");
-    el.className = "hotspot" + (h.important ? " important" : "") + (h.img ? " has-img" : "");
+    el.className = "hotspot" + (h.important ? " important" : "") + (h.img ? " has-img npc-pace" : "");
     el.style.cssText = h.style;
     if (h.img) {
       const img = document.createElement("img");
@@ -2429,7 +2429,13 @@
         ]);
       }, x: 16 },
       { label: "Kiosk Vendor", style: "left:36%;bottom:8%;width:22%;height:46%;", important: true, img: "char-business.png", action: () => talkDynamicNPC("business"), x: 44 },
-      { label: "Shady Corner", style: "left:62%;bottom:10%;width:18%;height:44%;", img: "char-villain.png", action: () => talkDynamicNPC("villain"), x: 70 },
+      { label: "Shady Corner", style: "left:62%;bottom:10%;width:18%;height:44%;", img: "char-villain.png", action: () => {
+        say("Shady Corner", "A creepy figure steps out of the shadows.", [
+          { label: "Talk", fn: () => talkDynamicNPC("villain") },
+          { label: "Pull a weapon", fn: () => startWeaponDuel("Shady Figure") },
+          { label: "Leave", fn: () => {} }
+        ]);
+      }, x: 70 },
       { label: "Sell Junk", style: "left:82%;bottom:12%;width:16%;height:30%;", action: () => openSellMenu("Mall Buyer"), x: 86 },
       { label: "Exit", style: "left:40%;bottom:1%;width:20%;height:11%;", action: () => show("hub"), x: 50 }
     ], 28, []);
@@ -2483,6 +2489,7 @@
         say("Alley", "Someone wants to buy 'whatever fell off a truck.'", [
           { label: "Sell stolen-ish junk", fn: () => { shiftAlign(-7, "Fenced goods"); openSellMenu("Fence"); change("heat", 6); } },
           { label: "Talk to them", fn: () => talkDynamicNPC("villain") },
+          { label: "Pull a weapon", fn: () => startWeaponDuel("Alley Tough") },
           { label: "Back out", fn: () => shiftAlign(2, "Walked away from a bad deal") }
         ]);
       }, x: 84 },
@@ -2549,9 +2556,256 @@
   const imgPicnic = new Image();
   imgPicnic.src = "bg-picnic-fp.jpg";
   const imgDrive = new Image();
-  imgDrive.src = "bg-drive-overhead-v2.jpg";
+  imgDrive.src = "bg-drive-road-empty.jpg";
 
   const spit = { running: false, raf: null, score: 0, ammo: 12, targets: [], lastT: 0, time: 20 };
+
+  
+  // ===== FPS spitball duel (Wolfenstein-ish) =====
+  const duel = {
+    running: false, raf: null, lastT: 0,
+    playerHp: 10, enemyHp: 10, maxHits: 10,
+    ammo: 10, enemyX: 0.5, enemyVX: 0.15,
+    enemyShootCD: 0, playerShootCD: 0,
+    bullets: [], // {x,y,vy,from:'p'|'e'}
+    yaw: 0, // look
+    enemyName: "Rival",
+    weapon: "spitballs"
+  };
+
+  function canUseWeapon() {
+    const ids = ["spitballs", "bubbles", "gum", "nunchucks"];
+    return ids.find(id => {
+      const it = state.inventory.find(i => i.id === id);
+      return it && it.qty > 0;
+    });
+  }
+
+  function startWeaponDuel(npcName, opts) {
+    opts = opts || {};
+    const w = canUseWeapon();
+    if (!w) {
+      say(npcName, "You reach for a weapon… pockets empty.", [{ label: "Uh oh", fn: () => {} }]);
+      return;
+    }
+    say(npcName, "They square up. Time for a spitball showdown.", [
+      { label: "Fight!", fn: () => runFpsDuel(npcName, w) },
+      { label: "Back down", fn: () => shiftAlign(1, "Chose not to fight") }
+    ]);
+  }
+
+  function runFpsDuel(npcName, weaponId) {
+    show("drive");
+    const canvas = $("#drive-canvas");
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = canvas.clientWidth * dpr;
+    canvas.height = canvas.clientHeight * dpr;
+    duel.running = true;
+    duel.playerHp = 10;
+    duel.enemyHp = 10;
+    duel.maxHits = 10;
+    duel.ammo = Math.min(15, (state.inventory.find(i => i.id === weaponId) || { qty: 5 }).qty);
+    duel.enemyX = 0.5;
+    duel.enemyVX = 0.18;
+    duel.enemyShootCD = 1.2;
+    duel.playerShootCD = 0;
+    duel.bullets = [];
+    duel.yaw = 0;
+    duel.enemyName = npcName || "Rival";
+    duel.weapon = weaponId;
+    duel.lastT = 0;
+    $("#drive-speed").textContent = "HP " + duel.playerHp + "/10";
+    $("#drive-dist").textContent = "Enemy " + duel.enemyHp + "/10";
+    $("#drive-heat").textContent = "Ammo " + duel.ammo;
+    $("#btn-boost").textContent = "Shoot";
+    $("#btn-brake").textContent = "Strafe";
+    $("#drive-steer-hint").textContent = "Tap to aim · they shoot back";
+
+    const fire = (nx) => {
+      if (!duel.running || duel.ammo <= 0 || duel.playerShootCD > 0) return;
+      duel.ammo--;
+      useItem(duel.weapon, 1);
+      duel.playerShootCD = 0.28;
+      // bullet toward enemy plane
+      const aim = nx != null ? nx : (0.5 + (duel.enemyX - 0.5) * 0.3);
+      duel.bullets.push({ x: 0.5, y: 0.85, tx: aim, ty: 0.35, life: 0.4, from: "p" });
+      $("#drive-heat").textContent = "Ammo " + duel.ammo;
+    };
+
+    canvas.onclick = (e) => {
+      const r = canvas.getBoundingClientRect();
+      fire((e.clientX - r.left) / r.width);
+    };
+    canvas.ontouchstart = (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      const r = canvas.getBoundingClientRect();
+      fire((t.clientX - r.left) / r.width);
+    };
+    $("#btn-boost").onpointerdown = () => fire(duel.enemyX);
+    $("#btn-brake").onpointerdown = () => {
+      duel.yaw = (duel.yaw || 0) + (Math.random() > 0.5 ? 0.08 : -0.08);
+      toast("Strafe!");
+    };
+    $("#btn-drive-exit").onclick = () => endFpsDuel(false);
+
+    const loop = (t) => {
+      if (!duel.running) return;
+      if (!duel.lastT) duel.lastT = t;
+      const dt = Math.min(0.05, (t - duel.lastT) / 1000);
+      duel.lastT = t;
+      duel.playerShootCD = Math.max(0, duel.playerShootCD - dt);
+      duel.enemyShootCD -= dt;
+
+      // enemy patrol left-right
+      duel.enemyX += duel.enemyVX * dt;
+      if (duel.enemyX > 0.78 || duel.enemyX < 0.22) duel.enemyVX *= -1;
+
+      // enemy shoots
+      if (duel.enemyShootCD <= 0 && duel.enemyHp > 0) {
+        duel.enemyShootCD = 0.7 + Math.random() * 0.6;
+        duel.bullets.push({
+          x: duel.enemyX, y: 0.38, tx: 0.5 + (Math.random() - 0.5) * 0.25,
+          ty: 0.9, life: 0.55, from: "e"
+        });
+      }
+
+      // move bullets
+      duel.bullets.forEach(b => {
+        b.life -= dt;
+        const p = 1 - Math.max(0, b.life) / (b.from === "p" ? 0.4 : 0.55);
+        const sx = b.from === "p" ? 0.5 : b.x;
+        const sy = b.from === "p" ? 0.85 : 0.38;
+        b.cx = sx + (b.tx - sx) * p;
+        b.cy = sy + (b.ty - sy) * p;
+        // hit checks near end of life
+        if (b.from === "p" && p > 0.7 && Math.abs(b.cx - duel.enemyX) < 0.12 && b.cy < 0.5) {
+          if (!b.hit) {
+            b.hit = true; b.life = 0;
+            duel.enemyHp--;
+            showCallout(pick(["Ow!", "Hey!", "Cut it out!", "You'll pay!"]));
+            $("#drive-dist").textContent = "Enemy " + Math.max(0, duel.enemyHp) + "/10";
+          }
+        }
+        if (b.from === "e" && p > 0.75 && Math.abs(b.cx - 0.5) < 0.14 && b.cy > 0.75) {
+          if (!b.hit) {
+            b.hit = true; b.life = 0;
+            duel.playerHp--;
+            $("#drive-speed").textContent = "HP " + Math.max(0, duel.playerHp) + "/10";
+            if (Math.random() > 0.5) showCallout("Gotcha!");
+          }
+        }
+      });
+      duel.bullets = duel.bullets.filter(b => b.life > 0);
+
+      drawFpsDuel(canvas);
+
+      if (duel.enemyHp <= 0) { endFpsDuel(true); return; }
+      if (duel.playerHp <= 0) { endFpsDuel(false); return; }
+      if (duel.ammo <= 0 && duel.bullets.length === 0) {
+        // stalemate — slight loss
+        setTimeout(() => endFpsDuel(duel.enemyHp < duel.playerHp), 400);
+        return;
+      }
+      duel.raf = requestAnimationFrame(loop);
+    };
+    duel.raf = requestAnimationFrame(loop);
+  }
+
+  function drawFpsDuel(canvas) {
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    // corridor / alley first-person
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, "#1a1520");
+    g.addColorStop(0.45, "#3d2a1f");
+    g.addColorStop(0.45, "#2a2a2a");
+    g.addColorStop(1, "#111");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    // walls perspective
+    ctx.fillStyle = "#4a3428";
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w * 0.28, h * 0.45); ctx.lineTo(0, h); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(w, 0); ctx.lineTo(w * 0.72, h * 0.45); ctx.lineTo(w, h); ctx.fill();
+    // far wall
+    ctx.fillStyle = "#2c2218";
+    ctx.fillRect(w * 0.28, h * 0.2, w * 0.44, h * 0.25);
+    // enemy clay figure
+    if (duel.enemyHp > 0) {
+      const ex = duel.enemyX * w;
+      const ey = h * 0.42;
+      const sc = h * 0.22;
+      ctx.fillStyle = "#5d4e37";
+      ctx.beginPath();
+      ctx.ellipse(ex, ey + sc * 0.55, sc * 0.28, sc * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#c4a574";
+      ctx.beginPath();
+      ctx.arc(ex, ey, sc * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#222";
+      ctx.beginPath();
+      ctx.arc(ex - sc * 0.08, ey - sc * 0.02, sc * 0.04, 0, Math.PI * 2);
+      ctx.arc(ex + sc * 0.08, ey - sc * 0.02, sc * 0.04, 0, Math.PI * 2);
+      ctx.fill();
+      // HP bar
+      ctx.fillStyle = "#333";
+      ctx.fillRect(ex - sc * 0.3, ey - sc * 0.45, sc * 0.6, 8);
+      ctx.fillStyle = "#e74c3c";
+      ctx.fillRect(ex - sc * 0.3, ey - sc * 0.45, sc * 0.6 * (duel.enemyHp / 10), 8);
+    }
+    // bullets
+    duel.bullets.forEach(b => {
+      const bx = (b.cx != null ? b.cx : b.x) * w;
+      const by = (b.cy != null ? b.cy : b.y) * h;
+      ctx.fillStyle = b.from === "p" ? "#7fdbff" : "#ff6b6b";
+      ctx.beginPath();
+      ctx.arc(bx, by, b.from === "p" ? 10 : 12, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    // crosshair
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = 2;
+    const cx = w * 0.5, cy = h * 0.55;
+    ctx.beginPath();
+    ctx.moveTo(cx - 18, cy); ctx.lineTo(cx + 18, cy);
+    ctx.moveTo(cx, cy - 18); ctx.lineTo(cx, cy + 18);
+    ctx.stroke();
+    // weapon barrel bottom
+    ctx.fillStyle = "#333";
+    ctx.fillRect(w * 0.35, h * 0.88, w * 0.3, h * 0.12);
+    ctx.fillStyle = "#555";
+    ctx.fillRect(w * 0.45, h * 0.82, w * 0.1, h * 0.08);
+  }
+
+  function endFpsDuel(won) {
+    duel.running = false;
+    if (duel.raf) cancelAnimationFrame(duel.raf);
+    const canvas = $("#drive-canvas");
+    if (canvas) { canvas.onclick = null; canvas.ontouchstart = null; }
+    $("#btn-boost").textContent = "Speed";
+    $("#btn-brake").textContent = "Brake";
+    $("#drive-steer-hint").textContent = "Swipe to steer";
+    show("hub");
+    if (won) {
+      shiftAlign(-5, "Won a spitball duel");
+      change("morale", 10, "You won the showdown.");
+      change("heat", 5);
+      change("money", 8, "They drop some cash running.");
+      say("Victory", "They bolt. Spitballs rain one last time as they yell.", [
+        { label: "Dust yourself off", fn: () => {} }
+      ]);
+    } else {
+      change("morale", -10, "You got plastered with spitballs.");
+      const player = state.family.find(f => f.isPlayer);
+      if (player) player.hp = Math.max(10, player.hp - 15);
+      change("heat", 3);
+      say("Ouch", "You take up to 10 hits and fold. They laugh and leave.", [
+        { label: "Retreat", fn: () => {} }
+      ]);
+    }
+    updateHub();
+  }
 
   function startSpitballGame() {
     if (state.flags.picnicDone) {
@@ -2784,87 +3038,45 @@
     spit.running = false;
     if (spit.raf) cancelAnimationFrame(spit.raf);
     const canvas = $("#drive-canvas");
-    canvas.onclick = null;
-    canvas.ontouchstart = null;
-    // restore drive button labels
+    if (canvas) { canvas.onclick = null; canvas.ontouchstart = null; }
     $("#btn-boost").textContent = "Speed";
     $("#btn-brake").textContent = "Brake";
     $("#drive-steer-hint").textContent = "Swipe to steer";
 
     state.flags.picnicDone = true;
-    change("heat", 4 + Math.floor(spit.score / 2));
+    change("heat", 3 + Math.floor(spit.score / 2));
     if (spit.score >= 3) shiftAlign(-4, "Spitball ambush");
 
+    // Visual run-away phase briefly before hub
+    const runAway = (msg, foodReward) => {
+      showCallout(msg);
+      // animate targets fleeing in last frame if spit still has data
+      if (spit.targets) spit.targets.forEach(t => { t.flee = true; t.y -= 0.02; });
+      if (foodReward) {
+        change("food", foodReward, "You snag their abandoned picnic basket.");
+        toast("+" + foodReward + " food from the picnic");
+      }
+      setTimeout(() => {
+        show("hub");
+        say("Picnic Aftermath", msg + (foodReward ? " You grab their leftover sandwiches before they vanish into the trees." : ""), [
+          { label: "Nice", fn: () => {} }
+        ]);
+      }, 900);
+    };
+
     if (spit.score >= 6) {
-      change("morale", 14, "They grab the blanket and sprint into the trees.");
-      change("money", 5, "Coins bounce off the path as they run.");
-      showCallout("We're outta here!!");
+      change("morale", 14, "They grab the blanket and sprint.");
+      change("money", 5, "Coins bounce off the path.");
+      runAway("We're outta here!!", 12);
     } else if (spit.score >= 3) {
-      change("morale", 7, "Angry shouting, then a hurried pack-up.");
-      showCallout("Let's GO. Now!");
+      change("morale", 6, "They pack up in a huff.");
+      runAway("That's it — we're leaving!", 8);
     } else {
-      change("morale", -2, "They glare, then decide you aren't worth it.");
-      showCallout("Whatever. Pack it up.");
+      change("morale", -4, "They barely noticed. Awkward.");
+      setTimeout(() => show("hub"), 400);
+      log("Weak spitball raid. Score " + spit.score);
     }
-    // short run-off animation flag
-    spit.runningOff = true;
-    setTimeout(() => {
-      show("hub");
-      log("Spitball picnic ambush: " + spit.score + " hits. Family ran off.");
-      say("Ambush Over", "Hits: " + spit.score + ". The rival family bolted with their picnic. Heat is up — move before a ranger asks questions.", [
-        { label: "Back to camper", fn: () => {} }
-      ]);
-    }, 900);
-  }
-
-  // ---------- DRIVING MINI-GAME ----------
-  const drive = {
-    running: false,
-    raf: null,
-    lane: 1, // 0 left 1 mid 2 right
-    speed: 40,
-    boosting: false,
-    braking: false,
-    dist: 0,
-    goal: 12, // miles
-    obstacles: [],
-    cops: [],
-    roadOffset: 0,
-    lastSpawn: 0,
-    crashed: false
-  };
-
-  function startHighway() {
-    show("drive");
-    const canvas = $("#drive-canvas");
-    const resize = () => {
-      canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
-      canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
-    };
-    resize();
-    drive.running = true;
-    drive.lane = 1;
-    drive.speed = 40;
-    drive.boosting = false;
-    drive.braking = false;
-    drive.dist = 0;
-    drive.timeLeft = state.difficulty === "hard" ? 60 : (state.difficulty === "easy" ? 10 : 20);
-    drive.duration = drive.timeLeft;
-    drive.maxHits = state.difficulty === "hard" ? 1 : (state.difficulty === "easy" ? 3 : 2);
-    drive.hits = 0;
-    drive.obstacles = [];
-    drive.cops = [];
-    drive.roadOffset = 0;
-    drive.lastSpawn = 0;
-    drive.crashed = false;
-    bindDriveControls();
-    const loop = (t) => {
-      if (!drive.running) return;
-      updateDrive(t);
-      drawDrive(canvas);
-      drive.raf = requestAnimationFrame(loop);
-    };
-    drive.raf = requestAnimationFrame(loop);
+    log("Picnic ambush over. Hits: " + spit.score);
   }
 
   function stopDrive() {
@@ -3030,6 +3242,45 @@
     }
   }
 
+  
+  function drawTopCar(ctx, cx, cy, cw, ch, bodyColor, isCop) {
+    // shadow
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    roundRect(ctx, cx - cw/2 + 4, cy - ch/2 + 6, cw, ch, 10);
+    ctx.fill();
+    // body
+    ctx.fillStyle = bodyColor;
+    roundRect(ctx, cx - cw/2, cy - ch/2, cw, ch, 10);
+    ctx.fill();
+    // roof darker
+    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    roundRect(ctx, cx - cw * 0.32, cy - ch * 0.18, cw * 0.64, ch * 0.36, 6);
+    ctx.fill();
+    // windshield
+    ctx.fillStyle = isCop ? "rgba(100,180,255,0.85)" : "rgba(180,220,255,0.8)";
+    roundRect(ctx, cx - cw * 0.28, cy - ch * 0.42, cw * 0.56, ch * 0.22, 4);
+    ctx.fill();
+    // rear window
+    roundRect(ctx, cx - cw * 0.28, cy + ch * 0.18, cw * 0.56, ch * 0.16, 3);
+    ctx.fill();
+    // headlights
+    ctx.fillStyle = "#ffeaa7";
+    ctx.beginPath(); ctx.arc(cx - cw * 0.28, cy - ch * 0.48, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + cw * 0.28, cy - ch * 0.48, 4, 0, Math.PI * 2); ctx.fill();
+    // wheels
+    ctx.fillStyle = "#111";
+    const wh = ch * 0.18, ww = 6;
+    [[-1, -0.3], [1, -0.3], [-1, 0.25], [1, 0.25]].forEach(([sx, sy]) => {
+      ctx.fillRect(cx + sx * cw/2 - (sx > 0 ? 0 : ww), cy + sy * ch - wh/2, ww, wh);
+    });
+    if (isCop) {
+      ctx.fillStyle = "#e74c3c";
+      ctx.fillRect(cx - 6, cy - ch * 0.55, 5, 6);
+      ctx.fillStyle = "#3498db";
+      ctx.fillRect(cx + 1, cy - ch * 0.55, 5, 6);
+    }
+  }
+
   function drawDrive(canvas) {
     const ctx = canvas.getContext("2d");
     const w = canvas.width, h = canvas.height;
@@ -3064,26 +3315,10 @@
       if (o.hit) return;
       const cx = laneCenters[o.lane] * w;
       const cy = o.y * h;
-      const cw = w * 0.09;
-      const ch = h * 0.11;
-      const colors = ["#c0392b", "#2980b9", "#f1c40f", "#8e44ad", "#e67e22"];
-      // shadow
-      ctx.fillStyle = "rgba(0,0,0,0.25)";
-      roundRect(ctx, cx - cw/2 + 3, cy - ch/2 + 4, cw, ch, 8);
-      ctx.fill();
-      ctx.fillStyle = colors[o.lane % colors.length];
-      roundRect(ctx, cx - cw/2, cy - ch/2, cw, ch, 8);
-      ctx.fill();
-      // windshield top
-      ctx.fillStyle = "rgba(180,220,255,0.75)";
-      roundRect(ctx, cx - cw * 0.32, cy - ch * 0.42, cw * 0.64, ch * 0.28, 4);
-      ctx.fill();
-      // wheels
-      ctx.fillStyle = "#222";
-      ctx.fillRect(cx - cw/2 - 3, cy - ch * 0.28, 5, ch * 0.2);
-      ctx.fillRect(cx + cw/2 - 2, cy - ch * 0.28, 5, ch * 0.2);
-      ctx.fillRect(cx - cw/2 - 3, cy + ch * 0.08, 5, ch * 0.2);
-      ctx.fillRect(cx + cw/2 - 2, cy + ch * 0.08, 5, ch * 0.2);
+      const cw = w * 0.1;
+      const ch = h * 0.13;
+      const colors = ["#c0392b", "#2980b9", "#f1c40f", "#8e44ad", "#e67e22", "#16a085"];
+      drawTopCar(ctx, cx, cy, cw, ch, colors[o.lane % colors.length], false);
     });
 
     (drive.cops || []).forEach(c => {

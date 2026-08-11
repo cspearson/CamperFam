@@ -960,3 +960,22 @@ h2 {
 
 .align-res b { color: #f0b429; min-width: 4.5rem; display: inline-block; }
 #bg-debug { max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.hotspot.has-img .hotspot-img {
+  animation: npcBob 2.4s ease-in-out infinite;
+}
+.hotspot.has-img:nth-child(2n) .hotspot-img { animation-delay: 0.4s; }
+.hotspot.has-img:nth-child(3n) .hotspot-img { animation-delay: 0.9s; }
+@keyframes npcBob {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  25% { transform: translateY(-6px) translateX(3px); }
+  50% { transform: translateY(-2px) translateX(-4px); }
+  75% { transform: translateY(-8px) translateX(2px); }
+}
+.hotspot.has-img.npc-pace {
+  animation: npcPace 5s ease-in-out infinite alternate;
+}
+@keyframes npcPace {
+  from { margin-left: 0; }
+  to { margin-left: 18px; }
+}
