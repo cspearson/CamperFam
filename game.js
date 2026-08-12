@@ -80,13 +80,18 @@
       { id: "campground", label: "Shady Pines Campground" },
       { id: "diner", label: "Neon Diner & Gift Shop" },
       { id: "gas", label: "Highway Gas & Snacks" },
-      { id: "mall", label: "Valley View Mall" }
+      { id: "mall", label: "Valley View Mall" },
+      { id: "forest", label: "Deep Woods Trail" },
+      { id: "city", label: "Music Row Side Street" }
     ]},
     KY: { name: "Kentucky", places: [
       { id: "bluegrass", label: "Bluegrass Welcome Center" },
       { id: "reststop", label: "Rest Area" },
       { id: "museum", label: "Horse Country Museum" },
-      { id: "city", label: "Downtown Strip" }
+      { id: "city", label: "Downtown Strip" },
+      { id: "campground", label: "Horse Park Camp" },
+      { id: "diner", label: "Derby Diner" },
+      { id: "forest", label: "Bluegrass Hollow" }
     ]},
     OH: { name: "Ohio", places: [
       { id: "twinlakes", label: "Twin Lakes Overlook" },
@@ -129,6 +134,22 @@
       { id: "campground", label: "Coastal Camp" },
       { id: "city", label: "Boardwalk Strip" },
       { id: "mall", label: "Sun Outlet Mall" }
+    ]},
+    MO: { name: "Missouri", places: [
+      { id: "reststop", label: "Gateway Rest Stop" },
+      { id: "city", label: "Riverfront Streets" },
+      { id: "diner", label: "BBQ Pit Stop" },
+      { id: "museum", label: "Jazz & River Museum" },
+      { id: "campground", label: "Ozark Campground" },
+      { id: "forest", label: "Ozark Trail" }
+    ]},
+    SC: { name: "South Carolina", places: [
+      { id: "reststop", label: "Palmetto Rest" },
+      { id: "city", label: "Lowcountry Streets" },
+      { id: "diner", label: "Coastal Grill" },
+      { id: "campground", label: "Palmetto Camp" },
+      { id: "mall", label: "Harbor Mall" },
+      { id: "forest", label: "Lowcountry Woods" }
     ]},
     TX: { name: "Texas", places: [
       { id: "reststop", label: "Big Sky Rest Stop" },
@@ -304,7 +325,38 @@
     ]);
   }
 
-  function talkDynamicNPC(type) {
+  
+  function talkStrayCat() {
+    const hasLaser = state.inventory.find(i => i.id === "laser" && i.qty > 0);
+    const lines = hasLaser ? [
+      "The cat goes full gremlin for the red dot.",
+      "You paint circles on the pavement. The cat teleports.",
+      "Laser + alley cat = free entertainment."
+    ] : [
+      "A scruffy cat stares through you.",
+      "It meows like it knows your secrets.",
+      "Stray. Judgmental. Iconic."
+    ];
+    say("Stray Cat", pick(lines), [
+      hasLaser ? { label: "Play with laser", fn: () => { change("morale", 8, "Laser cat therapy."); shiftAlign(2, "Be kind to animals"); } } : { label: "Offer crumbs", fn: () => { if (state.resources.food > 2) { change("food", -1); change("morale", 3); } else toast("No crumbs."); } },
+      { label: "Leave it be", fn: () => {} }
+    ]);
+  }
+
+  function maybeAddCat(spots) {
+    if (Math.random() > 0.45) {
+      spots.push({
+        label: "Stray Cat",
+        style: "left:" + (10 + Math.floor(Math.random()*70)) + "%;bottom:" + (6 + Math.floor(Math.random()*20)) + "%;width:16%;height:28%;",
+        img: "char-shady.png", // placeholder until cat art
+        action: () => talkStrayCat(),
+        x: 50
+      });
+    }
+    return spots;
+  }
+
+function talkDynamicNPC(type) {
     const tables = {
       hobo: {
         name: pick(["Roadside Hank", "Quiet Sue", "Old Map Guy", "Bench Philosopher"]),
@@ -418,26 +470,38 @@
     GodMode: {
       state: "TN",
       name: "GodMode",
-      desc: "Crash as much as you want on drives — no fail from hits.",
-      how: "Night Ruckus: score 8+ pranks without getting caught by the ranger."
+      desc: "You can't get hurt (HP damage ignored). Drives can still fail.",
+      how: "Night Ruckus: score 8+ pranks without getting caught."
     },
     CheeseSteakJimmies: {
       state: "KY",
       name: "CheeseSteakJimmies",
       desc: "Unlimited food.",
-      how: "Win an FPS spitball duel with 8+ enemy HP damage and 0 player hits taken."
+      how: "Flawless FPS duel in Kentucky."
     },
     LumberGas: {
       state: "OH",
       name: "LumberGas",
       desc: "Unlimited gas.",
-      how: "Finish a highway drive with 0 hits on Medium or Hard."
+      how: "0-hit drive on Medium/Hard linked to Ohio."
     },
     RoseBurt: {
       state: "IN",
       name: "RoseBurt",
       desc: "Unlimited money.",
-      how: "Complete the Twin Lakes / overlook side path with heat under 10 and leave $50+ from honest work only (no crime sells that day)."
+      how: "Honest work in Indiana, heat under 10, $50+."
+    },
+    SuperMax: {
+      state: "GA",
+      name: "SuperMax",
+      desc: "Unlimited ammo and traps.",
+      how: "Picnic ambush: 9+ hits in Georgia woods."
+    },
+    NoHeat: {
+      state: "NC",
+      name: "NoHeat",
+      desc: "Can't be arrested.",
+      how: "Leave a state with heat 40+ without an arrest (NC)."
     }
   };
 
@@ -445,6 +509,7 @@
     if (!state.cheats) state.cheats = { unlocked: [], active: {} };
     if (state.cheats.unlocked.includes(id)) return;
     state.cheats.unlocked.push(id);
+    if (window._refreshCheatBtn) window._refreshCheatBtn();
     toast("CHEAT UNLOCKED: " + id);
     say("Cheat Unlocked!", (CHEAT_DEFS[id] ? CHEAT_DEFS[id].name + " — " + CHEAT_DEFS[id].desc : id), [
       { label: "Nice", fn: () => {} }
@@ -460,28 +525,27 @@
     if (!state.cheats) state.cheats = { unlocked: [], active: {} };
     const unlocked = state.cheats.unlocked || [];
     const choices = [];
-    Object.keys(CHEAT_DEFS).forEach(id => {
-      const def = CHEAT_DEFS[id];
-      if (unlocked.includes(id)) {
-        const on = !!state.cheats.active[id];
-        choices.push({
-          label: (on ? "ON · " : "OFF · ") + def.name + " — " + def.desc,
-          fn: () => {
-            state.cheats.active[id] = !state.cheats.active[id];
-            toast(def.name + (state.cheats.active[id] ? " ON" : " OFF"));
-            applyCheatEffects();
-            updateHub();
-          }
-        });
-      } else {
-        choices.push({
-          label: "🔒 " + def.name + " (" + def.state + ")",
-          fn: () => say(def.name, "Locked. " + def.how, [{ label: "OK", fn: () => {} }])
-        });
-      }
+    unlocked.forEach(id => {
+      const def = CHEAT_DEFS[id] || { name: id, desc: "" };
+      const on = !!state.cheats.active[id];
+      choices.push({
+        label: (on ? "ON · " : "OFF · ") + def.name + " — " + def.desc,
+        fn: () => {
+          state.cheats.active[id] = !state.cheats.active[id];
+          toast(def.name + (state.cheats.active[id] ? " ON" : " OFF"));
+          applyCheatEffects();
+          updateHub();
+        }
+      });
     });
+    if (!choices.length) {
+      say("Cheats", "Nothing unlocked yet. Hard challenges hide around the states.", [
+        { label: "OK", fn: () => {} }
+      ]);
+      return;
+    }
     choices.push({ label: "Close", fn: () => {} });
-    say("Cheats", unlocked.length ? "Toggle unlocked cheats. Locked ones show how to earn them." : "No cheats unlocked yet. Finish hard challenges — one per state.", choices);
+    say("Cheats", "Toggle what you've earned.", choices);
   }
 
   function applyCheatEffects() {
@@ -672,6 +736,8 @@
   }
 
   function advanceDay(reason) {
+    if (state.currentState === "NC" && state.resources.heat >= 40) unlockCheat("NoHeat");
+
     try { saveGame(); } catch (e) {}
     state.day++;
     state.dayLabel = dayLabels[Math.min(state.day, dayLabels.length - 1)] || `Day ${state.day}`;
@@ -736,6 +802,7 @@
 
   function damageMember(member, amount, reason) {
     if (!member || member.status !== "ok") return;
+    if (isCheatOn("GodMode")) { toast("GodMode: no damage"); return; }
     member.hp = Math.max(0, member.hp - amount);
     if (member.isPlayer) {
       if ($("#res-hp")) $("#res-hp").textContent = Math.round(member.hp);
@@ -900,6 +967,7 @@
   }
 
   function getArrested(daysLost, reason) {
+    if (isCheatOn("NoHeat")) { toast("NoHeat: walked away from the cuffs"); shiftAlign(1, "Somehow not arrested"); return; }
     hideDialogue();
     clearSprites();
     const other = randomNonPlayer();
@@ -1038,6 +1106,7 @@
     return it && it.qty > 0;
   }
   function useItem(id, n = 1) {
+    if (isCheatOn("SuperMax") && (id === "spitballs" || id === "bubbles" || id === "gum" || id === "gum_trap" || id === "nunchucks" || id === "axe")) return;
     const it = state.inventory.find(i => i.id === id);
     if (it) it.qty = Math.max(0, it.qty - n);
   }
@@ -1658,7 +1727,7 @@
     canvas.width = canvas.clientWidth * dpr;
     canvas.height = canvas.clientHeight * dpr;
     ruckus.running = true;
-    ruckus.x = 0.5; ruckus.y = 0.85;
+    ruckus.x = 0.5; ruckus.y = 0.85; ruckus.targetX = 0.5; ruckus.targetY = 0.85; ruckus.speed = 0.55;
     ruckus.score = 0; ruckus.heat = 0; ruckus.time = 55;
     ruckus.caught = false;
     ruckus.lastT = 0;
@@ -1678,17 +1747,15 @@
     $("#drive-heat").textContent = "Quiet";
     $("#btn-boost").textContent = "Prank";
     $("#btn-brake").textContent = "Trap";
-    $("#drive-steer-hint").textContent = "Swipe move · avoid ranger";
+    $("#drive-steer-hint").textContent = "Tap walk · Prank/Trap/Axe";
+    // third action via long-boost isn't available — use trap+prank; axe via prank near trees if has axe
+    ruckus.hasAxe = !!(state.inventory.find(i => i.id === "axe" && i.qty > 0));
 
     let keys = { up:0, down:0, left:0, right:0 };
     const onDir = (nx, ny) => {
-      // move toward tap
-      const dx = nx - ruckus.x, dy = ny - ruckus.y;
-      const len = Math.hypot(dx, dy) || 1;
-      ruckus.x += (dx / len) * 0.04;
-      ruckus.y += (dy / len) * 0.04;
-      ruckus.x = Math.max(0.05, Math.min(0.95, ruckus.x));
-      ruckus.y = Math.max(0.05, Math.min(0.95, ruckus.y));
+      // set walk target — keeps walking until arrival; new click redirects
+      ruckus.targetX = Math.max(0.05, Math.min(0.95, nx));
+      ruckus.targetY = Math.max(0.05, Math.min(0.95, ny));
     };
     canvas.onclick = (e) => {
       const r = canvas.getBoundingClientRect();
@@ -1718,22 +1785,41 @@
         hit.pranked = true;
         ruckus.score++;
         ruckus.heat += 8;
-        ruckus.noises.push({ x: hit.x, y: hit.y, life: 1.2, text: pick(["CLANG!", "Hey!", "Who's there?!", "Zzz—wha?", "Gum?!"]) });
-        showCallout(pick(["Tent rattled!", "Cooler kicked!", "Bubblegum on the zipper!", "Pots crash!"]));
+        // Axe: fell a tree — scare ALL nearby tents
+        if (ruckus.hasAxe && Math.random() > 0.4) {
+          let scared = 0;
+          ruckus.tents.forEach(t => {
+            if (!t.pranked && Math.hypot(t.x - hit.x, t.y - hit.y) < 0.35) {
+              t.pranked = true; scared++; ruckus.score++;
+            }
+          });
+          ruckus.heat += 12;
+          showCallout("TIMBER! " + (scared + 1) + " tents freak out!");
+          useItem("axe", 0); // don't consume every swing — rare use
+        } else {
+          showCallout(pick(["Tent rattled!", "Cooler kicked!", "Bubblegum on the zipper!", "Pots crash!"]));
+        }
+        ruckus.noises.push({ x: hit.x, y: hit.y, life: 1.2, text: pick(["CLANG!", "Hey!", "Who's there?!", "Zzz—wha?", "Gum?!", "TIMBER!"]) });
         $("#drive-speed").textContent = "Pranks " + ruckus.score;
-        // ranger turns toward noise
         ruckus.ranger.alert = Math.min(3, ruckus.ranger.alert + 1);
         const dx = hit.x - ruckus.ranger.x, dy = hit.y - ruckus.ranger.y;
         const L = Math.hypot(dx, dy) || 1;
         ruckus.ranger.vx = (dx / L) * 0.12;
         ruckus.ranger.vy = (dy / L) * 0.12;
+      } else if (ruckus.hasAxe) {
+        // chop for noise even without tent
+        ruckus.score += 1;
+        ruckus.heat += 10;
+        showCallout("You chop a tree — CRACK!");
+        ruckus.ranger.alert = Math.min(3, ruckus.ranger.alert + 1.5);
+        $("#drive-speed").textContent = "Pranks " + ruckus.score;
       } else {
         toast("Get closer to a tent");
       }
     };
     const doTrap = () => {
       if (!ruckus.running) return;
-      if (ruckus.traps.length >= 3) { toast("Max traps"); return; }
+      if (ruckus.traps.length >= 3 && !isCheatOn("SuperMax")) { toast("Max traps"); return; }
       ruckus.traps.push({ x: ruckus.x, y: ruckus.y, life: 20 });
       toast("Bubblegum trap set");
       ruckus.heat += 2;
@@ -1749,6 +1835,17 @@
       ruckus.lastT = t;
       ruckus.time -= dt;
       $("#drive-dist").textContent = Math.ceil(ruckus.time) + "s";
+
+      // continuous walk toward target
+      {
+        const dx = ruckus.targetX - ruckus.x, dy = ruckus.targetY - ruckus.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 0.01) {
+          const step = Math.min(dist, (ruckus.speed || 0.55) * dt);
+          ruckus.x += (dx / dist) * step;
+          ruckus.y += (dy / dist) * step;
+        }
+      }
 
       // ranger patrol / chase
       const rg = ruckus.ranger;
@@ -1799,9 +1896,15 @@
   function drawNightRuckus(canvas) {
     const ctx = canvas.getContext("2d");
     const w = canvas.width, h = canvas.height;
-    // dark ground
-    ctx.fillStyle = "#0d1a0d";
-    ctx.fillRect(0, 0, w, h);
+    // night camp background
+    if (typeof imgNightCamp !== "undefined" && imgNightCamp.complete && imgNightCamp.naturalWidth) {
+      ctx.drawImage(imgNightCamp, 0, 0, w, h);
+      ctx.fillStyle = "rgba(0,0,20,0.25)";
+      ctx.fillRect(0, 0, w, h);
+    } else {
+      ctx.fillStyle = "#0d1a0d";
+      ctx.fillRect(0, 0, w, h);
+    }
     // paths
     ctx.strokeStyle = "rgba(80,90,60,0.5)";
     ctx.lineWidth = 8;
@@ -2100,7 +2203,8 @@
 
   function makeHotspot(h) {
     const el = document.createElement("div");
-    el.className = "hotspot" + (h.important ? " important" : "") + (h.img ? " has-img npc-pace" : "");
+    const isLiving = h.img && /char-|player-|cat|dog|animal|ranger|hobo|hippie|villain|business|waitress|rusty|shady|rival|baby|mom|dad|brother|sister/i.test(h.img);
+    el.className = "hotspot" + (h.important ? " important" : "") + (h.img ? " has-img" : "") + (isLiving ? " living" : " prop");
     el.style.cssText = h.style;
     if (h.img) {
       const img = document.createElement("img");
@@ -2150,7 +2254,6 @@
       { label: "Clearing", style: "left:64%;bottom:16%;width:24%;height:32%;", img: "obj-firering.png", action: forestClearing, x: 70 },
       { label: "Strange Noise", style: "left:18%;top:18%;width:22%;height:20%;", action: forestNoise, x: 28 },
       { label: "Picnic Ambush", style: "left:70%;top:12%;width:22%;height:18%;", important: true, action: startSpitballGame, x: 78 },
-      { label: "Night Ruckus", style: "left:70%;bottom:2%;width:24%;height:12%;", important: true, action: () => startNightRuckus(), x: 80 },
       { label: "Back to Camp", style: "left:40%;bottom:2%;width:22%;height:12%;", action: () => enterCampground(), x: 50 }
     ];
     spots.forEach(h => hs.appendChild(makeHotspot(h)));
@@ -2337,6 +2440,24 @@
   }
 
   // ---------- DINER ----------
+  function enterKitchen() {
+    enterGenericScene("diner", "Diner Kitchen", [
+      { label: "Dish Pit", style: "left:10%;bottom:10%;width:30%;height:40%;", action: () => {
+        say("Dish Pit", "Steam and regret.", [
+          { label: "Wash dishes for $12", fn: () => { change("money", 12); change("morale", -2); if (state.currentState === "IN" && state.resources.heat < 10) unlockCheat("RoseBurt"); } },
+          { label: "Leave", fn: () => enterDiner() }
+        ]);
+      }, x: 20 },
+      { label: "Walk-in Cooler", style: "left:55%;bottom:10%;width:30%;height:40%;", action: () => {
+        say("Cooler", "Tempting leftovers.", [
+          { label: "Steal scraps", fn: () => { change("food", 6); change("heat", 8); shiftAlign(-3, "Kitchen theft"); } },
+          { label: "Back", fn: () => enterDiner() }
+        ]);
+      }, x: 70 },
+      { label: "Back to Diner", style: "left:35%;bottom:2%;width:30%;height:12%;", action: () => enterDiner(), x: 50 }
+    ], 40);
+  }
+
   function enterDiner() {
     if (!state.flags.visitedDiner) { state.flags.visitedDiner = true; state.statesVisited++; }
     clearSprites();
@@ -2348,6 +2469,7 @@
     hs.innerHTML = "";
     // Positions tuned to claymation diner background
     const spots = [
+      { label: "Back Kitchen", style: "left:78%;bottom:8%;width:18%;height:36%;", action: () => enterKitchen(), x: 88 },
       { label: "Waitress", style: "left:4%;bottom:4%;width:24%;height:50%;", important: true, action: talkWaitress, x: 14 },
       { label: "Jukebox", style: "left:28%;bottom:22%;width:16%;height:36%;", action: examineJukebox, x: 34 },
       { label: "Guy at Counter", style: "left:44%;bottom:10%;width:16%;height:40%;", important: true, action: talkCounter, x: 50 },
@@ -2448,6 +2570,18 @@
 
   function openCraft() {
     const recipes = [
+      {
+        name: "Medieval Axe",
+        need: ["junk", "wire"],
+        result: { id: "axe", name: "Medieval Axe", desc: "Chop trees at night for maximum panic", qty: 1 },
+        effect: () => toast("Forged a ridiculous campground axe.")
+      },
+      {
+        name: "Laser Pointer",
+        need: ["wire", "duct_tape"],
+        result: { id: "laser", name: "Laser Pointer", desc: "Drive stray cats wild", qty: 1 },
+        effect: () => toast("Red dot of chaos ready.")
+      },
       {
         name: "Slapdash Antenna",
         need: ["wire", "duct_tape"],
@@ -2779,6 +2913,7 @@
     forceSceneBg(bgClass);
     $("#scene-title").textContent = title;
     maybeStalkShady(title);
+    spots = maybeAddCat(spots || []);
     const hs = $("#hotspots");
     hs.innerHTML = "";
     spots.forEach(h => hs.appendChild(makeHotspot(h)));
@@ -3439,6 +3574,7 @@
       }, 900);
     };
 
+    if (spit.score >= 9 && state.currentState === "GA") unlockCheat("SuperMax");
     if (spit.score >= 6) {
       change("morale", 14, "They grab the blanket and sprint.");
       change("money", 5, "Coins bounce off the path.");
@@ -3552,7 +3688,7 @@
         }
         toast("Hit! (" + drive.hits + "/" + drive.maxHits + ")");
         drive.speed *= 0.5;
-        if (drive.hits >= drive.maxHits && !isCheatOn("GodMode")) {
+        if (drive.hits >= drive.maxHits) {
           stopDrive();
           change("morale", -8, "Too many crashes. Drive failed.");
           change("gas", -5);
@@ -3993,7 +4129,15 @@
     $("#btn-talk-family").onclick = talkFamily;
     $("#btn-weapons").onclick = openInv;
     const cheatBtn = $("#btn-cheats");
-    if (cheatBtn) cheatBtn.onclick = openCheatMenu;
+    if (cheatBtn) {
+      cheatBtn.onclick = openCheatMenu;
+      const refreshCheatBtn = () => {
+        const u = (state.cheats && state.cheats.unlocked) || [];
+        cheatBtn.style.display = u.length ? "" : "none";
+      };
+      refreshCheatBtn();
+      window._refreshCheatBtn = refreshCheatBtn;
+    }
     $("#btn-depart").onclick = () => showMap();
     $("#btn-map-back").onclick = () => show("hub");
 
